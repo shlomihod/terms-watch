@@ -1,0 +1,4 @@
+# Services that frequently have page availability issues
+# These will be automatically marked as minor changes when availability patterns are detected
+problematic_services:
+  - "Llama API"

@@ -1,0 +1,238 @@
+'use client';
+
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { ChangeCard } from './change-card';
+import { Filters } from './filters';
+import { useScrollContext } from '@/app/contexts/scroll-context';
+import { PAGE_SIZE } from '@/lib/constants';
+
+interface Change {
+  id: string;
+  service: string;
+  category: 'social' | 'ai';
+  documentType: string;
+  commitDate: string;
+  commitUrl: string;
+  diffContent: string;
+  diffSummary: string | null;
+  isMinorChange?: boolean;
+}
+
+interface FeedProps {
+  initialChanges: Change[];
+}
+
+export function Feed({ initialChanges }: FeedProps) {
+  const [changes, setChanges] = useState(initialChanges);
+  const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [offset, setOffset] = useState(initialChanges.length);
+  const [filters, setFilters] = useState({
+    category: 'all' as 'all' | 'social' | 'ai',
+    service: '',
+    documentType: '',
+    includeFormattingOnly: false,
+  });
+  const { setHasPassedFirstLoad } = useScrollContext();
+
+  // Ref for the sentinel element
+  const observerTarget = useRef<HTMLDivElement>(null);
+
+  // Get unique services and document types for filter dropdowns
+  const services = Array.from(new Set(changes.map(c => c.service))).sort();
+  const documentTypes = Array.from(new Set(changes.map(c => c.documentType))).sort();
+
+  // Fetch more changes with current filters
+  const fetchMoreChanges = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    
+    setLoadingMore(true);
+    
+    try {
+      const params = new URLSearchParams();
+      if (filters.category !== 'all') params.append('category', filters.category);
+      if (filters.service) params.append('service', filters.service);
+      if (filters.documentType) params.append('documentType', filters.documentType);
+      params.append('includeFormattingOnly', filters.includeFormattingOnly.toString());
+      params.append('limit', PAGE_SIZE.toString());
+      params.append('offset', offset.toString());
+      
+      const response = await fetch(`/api/changes?${params}`);
+      const data = await response.json();
+      
+      if (data.changes && data.changes.length > 0) {
+        setChanges(prev => [...prev, ...data.changes]);
+        setOffset(prev => prev + data.changes.length);
+        
+        // Check if we've loaded all available changes
+        if (offset + data.changes.length >= data.total) {
+          setHasMore(false);
+        }
+      } else {
+        setHasMore(false);
+      }
+    } catch (error) {
+      setHasMore(false);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [offset, filters, loadingMore, hasMore]);
+
+  // Handle filter changes
+  const handleFilterChange = async (newFilters: {
+    category: 'all' | 'social' | 'ai';
+    service: string;
+    documentType: string;
+    includeFormattingOnly: boolean;
+  }) => {
+    setLoading(true);
+    setFilters(newFilters);
+    setOffset(0);
+    setHasMore(true);
+    
+    try {
+      const params = new URLSearchParams();
+      if (newFilters.category !== 'all') params.append('category', newFilters.category);
+      if (newFilters.service) params.append('service', newFilters.service);
+      if (newFilters.documentType) params.append('documentType', newFilters.documentType);
+      params.append('includeFormattingOnly', newFilters.includeFormattingOnly.toString());
+      params.append('limit', PAGE_SIZE.toString());
+      params.append('offset', '0');
+      
+      const response = await fetch(`/api/changes?${params}`);
+      const data = await response.json();
+      
+      setChanges(data.changes || []);
+      setOffset(data.changes?.length || 0);
+      
+      // Check if we have more data to load
+      if ((data.changes?.length || 0) >= data.total) {
+        setHasMore(false);
+      }
+    } catch (error) {
+      setChanges([]);
+      setHasMore(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Set up Intersection Observer
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore) {
+          // Mark that we've passed the first load point
+          setHasPassedFirstLoad(true);
+          fetchMoreChanges();
+        }
+      },
+      { threshold: 0.1 } // Trigger when 10% visible
+    );
+
+    const currentTarget = observerTarget.current;
+    if (currentTarget) {
+      observer.observe(currentTarget);
+    }
+
+    return () => {
+      if (currentTarget) {
+        observer.unobserve(currentTarget);
+      }
+    };
+  }, [fetchMoreChanges, hasMore, loadingMore, setHasPassedFirstLoad]);
+
+  // Check initial data to see if we need to load more
+  useEffect(() => {
+    // If initial load didn't fill the viewport and we might have more data
+    const checkInitialLoad = () => {
+      const scrollHeight = document.documentElement.scrollHeight;
+      const clientHeight = document.documentElement.clientHeight;
+      
+      // If content doesn't fill viewport and we haven't checked for more yet
+      if (scrollHeight <= clientHeight + 100 && hasMore && offset === initialChanges.length) {
+        fetchMoreChanges();
+      }
+    };
+    
+    // Small delay to ensure DOM is ready
+    setTimeout(checkInitialLoad, 100);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Handle URL hash for direct links (from RSS feed)
+  useEffect(() => {
+    const checkForHash = async () => {
+      const hash = window.location.hash.slice(1); // Remove the #
+      if (!hash) return;
+      
+      // Try to find the element
+      let element = document.getElementById(hash);
+      let attempts = 0;
+      const maxAttempts = 20; // Limit attempts to avoid infinite loop
+      
+      // Keep loading more content until we find the element
+      while (!element && hasMore && attempts < maxAttempts) {
+        await fetchMoreChanges();
+        // Wait a bit for DOM to update
+        await new Promise(resolve => setTimeout(resolve, 500));
+        element = document.getElementById(hash);
+        attempts++;
+      }
+      
+      // If element is found, scroll to it
+      if (element) {
+        setTimeout(() => {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 300);
+      }
+    };
+    
+    // Check on mount and when changes are loaded
+    checkForHash();
+  }, [changes.length]); // Re-run when changes array updates
+
+  return (
+    <>
+      <Filters
+        services={services}
+        documentTypes={documentTypes}
+        onFilterChange={handleFilterChange}
+      />
+      
+      {loading ? (
+        <div className="flex justify-center py-8">
+          <div className="text-gray-500">Loading changes...</div>
+        </div>
+      ) : changes.length === 0 ? (
+        <div className="text-center py-8 text-gray-500">
+          No changes found matching your filters.
+        </div>
+      ) : (
+        <>
+          <div className="space-y-6">
+            {changes.map((change) => (
+              <ChangeCard key={change.id} change={change} />
+            ))}
+          </div>
+          
+          {/* Sentinel element for intersection observer */}
+          <div ref={observerTarget} className="h-4" />
+          
+          {loadingMore && (
+            <div className="flex justify-center py-8">
+              <div className="text-gray-500">Loading more changes...</div>
+            </div>
+          )}
+          
+          {!hasMore && changes.length > 0 && (
+            <div className="text-center py-8 text-gray-500">
+              No more changes to load.
+            </div>
+          )}
+        </>
+      )}
+    </>
+  );
+}
