@@ -1,7 +1,5 @@
 'use client';
 
-import { useState } from 'react';
-
 interface FiltersProps {
   onFilterChange: (filters: {
     category: 'all' | 'social' | 'ai';
@@ -11,14 +9,21 @@ interface FiltersProps {
   }) => void;
   services: string[];
   documentTypes: string[];
+  currentCategory: 'all' | 'social' | 'ai';
+  currentService: string;
+  currentDocumentType: string;
+  currentIncludeFormattingOnly: boolean;
 }
 
-export function Filters({ onFilterChange, services, documentTypes }: FiltersProps) {
-  const [category, setCategory] = useState<'all' | 'social' | 'ai'>('all');
-  const [service, setService] = useState('');
-  const [documentType, setDocumentType] = useState('');
-  const [includeFormattingOnly, setIncludeFormattingOnly] = useState(false);
-
+export function Filters({
+  onFilterChange,
+  services,
+  documentTypes,
+  currentCategory,
+  currentService,
+  currentDocumentType,
+  currentIncludeFormattingOnly
+}: FiltersProps) {
   const handleFilterChange = (newFilters: Partial<{
     category: 'all' | 'social' | 'ai';
     service: string;
@@ -26,25 +31,16 @@ export function Filters({ onFilterChange, services, documentTypes }: FiltersProp
     includeFormattingOnly: boolean;
   }>) => {
     const updated = {
-      category: newFilters.category ?? category,
-      service: newFilters.service ?? service,
-      documentType: newFilters.documentType ?? documentType,
-      includeFormattingOnly: newFilters.includeFormattingOnly ?? includeFormattingOnly,
+      category: newFilters.category ?? currentCategory,
+      service: newFilters.service ?? currentService,
+      documentType: newFilters.documentType ?? currentDocumentType,
+      includeFormattingOnly: newFilters.includeFormattingOnly ?? currentIncludeFormattingOnly,
     };
-    
-    if (newFilters.category !== undefined) setCategory(newFilters.category);
-    if (newFilters.service !== undefined) setService(newFilters.service);
-    if (newFilters.documentType !== undefined) setDocumentType(newFilters.documentType);
-    if (newFilters.includeFormattingOnly !== undefined) setIncludeFormattingOnly(newFilters.includeFormattingOnly);
-    
+
     onFilterChange(updated);
   };
 
   const handleReset = () => {
-    setCategory('all');
-    setService('');
-    setDocumentType('');
-    setIncludeFormattingOnly(false);
     onFilterChange({
       category: 'all',
       service: '',
@@ -53,7 +49,7 @@ export function Filters({ onFilterChange, services, documentTypes }: FiltersProp
     });
   };
 
-  const hasActiveFilters = category !== 'all' || service !== '' || documentType !== '' || includeFormattingOnly;
+  const hasActiveFilters = currentCategory !== 'all' || currentService !== '' || currentDocumentType !== '' || currentIncludeFormattingOnly;
 
   return (
     <div className="flex flex-wrap gap-4 mb-8 p-4 bg-gray-50 rounded-lg">
@@ -61,7 +57,7 @@ export function Filters({ onFilterChange, services, documentTypes }: FiltersProp
         <button
           onClick={() => handleFilterChange({ category: 'all' })}
           className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-            category === 'all'
+            currentCategory === 'all'
               ? 'bg-gray-900 text-white'
               : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
           }`}
@@ -71,7 +67,7 @@ export function Filters({ onFilterChange, services, documentTypes }: FiltersProp
         <button
           onClick={() => handleFilterChange({ category: 'social' })}
           className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-            category === 'social'
+            currentCategory === 'social'
               ? 'bg-gray-800 text-white'
               : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
           }`}
@@ -81,7 +77,7 @@ export function Filters({ onFilterChange, services, documentTypes }: FiltersProp
         <button
           onClick={() => handleFilterChange({ category: 'ai' })}
           className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-            category === 'ai'
+            currentCategory === 'ai'
               ? 'bg-gray-900 text-white'
               : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
           }`}
@@ -91,7 +87,7 @@ export function Filters({ onFilterChange, services, documentTypes }: FiltersProp
       </div>
 
       <select
-        value={service}
+        value={currentService}
         onChange={(e) => handleFilterChange({ service: e.target.value })}
         className="px-4 py-2 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-900"
       >
@@ -104,7 +100,7 @@ export function Filters({ onFilterChange, services, documentTypes }: FiltersProp
       </select>
 
       <select
-        value={documentType}
+        value={currentDocumentType}
         onChange={(e) => handleFilterChange({ documentType: e.target.value })}
         className="px-4 py-2 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-900"
       >
@@ -119,7 +115,7 @@ export function Filters({ onFilterChange, services, documentTypes }: FiltersProp
       <label className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-gray-300 cursor-pointer hover:bg-gray-50 transition-colors">
         <input
           type="checkbox"
-          checked={includeFormattingOnly}
+          checked={currentIncludeFormattingOnly}
           onChange={(e) => handleFilterChange({ includeFormattingOnly: e.target.checked })}
           className="w-4 h-4 text-gray-900 border-gray-300 rounded focus:ring-gray-900"
         />

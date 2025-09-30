@@ -88,29 +88,43 @@ export function Feed({ initialChanges, availableServices, availableDocumentTypes
   }) => {
     setLoading(true);
 
-    // If category changed, reset service and documentType filters
-    const adjustedFilters = newFilters.category !== filters.category
-      ? { ...newFilters, service: '', documentType: '' }
-      : newFilters;
+    // Determine what changed and reset dependent filters
+    let adjustedFilters = { ...newFilters };
+
+    if (newFilters.category !== filters.category) {
+      // Category changed → reset service and documentType
+      adjustedFilters = { ...newFilters, service: '', documentType: '' };
+    } else if (newFilters.documentType !== filters.documentType) {
+      // DocumentType changed → reset service and documentType
+      adjustedFilters = { ...newFilters, service: '', documentType: '' };
+    } else if (newFilters.service !== filters.service) {
+      // Service changed → reset documentType only
+      adjustedFilters = { ...newFilters, documentType: '' };
+    }
 
     setFilters(adjustedFilters);
     setOffset(0);
     setHasMore(true);
 
     try {
-      // If category changed, fetch new filter options
-      if (newFilters.category !== filters.category) {
-        const optionsParams = new URLSearchParams();
-        if (newFilters.category !== 'all') {
-          optionsParams.append('category', newFilters.category);
-        }
-
-        const optionsResponse = await fetch(`/api/filter-options?${optionsParams}`);
-        const optionsData = await optionsResponse.json();
-        setServices(optionsData.services || []);
-        setDocumentTypes(optionsData.documentTypes || []);
+      // Fetch new filter options based on the adjusted filters
+      const optionsParams = new URLSearchParams();
+      if (adjustedFilters.category !== 'all') {
+        optionsParams.append('category', adjustedFilters.category);
+      }
+      if (adjustedFilters.service) {
+        optionsParams.append('service', adjustedFilters.service);
+      }
+      if (adjustedFilters.documentType) {
+        optionsParams.append('documentType', adjustedFilters.documentType);
       }
 
+      const optionsResponse = await fetch(`/api/filter-options?${optionsParams}`);
+      const optionsData = await optionsResponse.json();
+      setServices(optionsData.services || []);
+      setDocumentTypes(optionsData.documentTypes || []);
+
+      // Fetch changes with the adjusted filters
       const params = new URLSearchParams();
       if (adjustedFilters.category !== 'all') params.append('category', adjustedFilters.category);
       if (adjustedFilters.service) params.append('service', adjustedFilters.service);
@@ -218,6 +232,10 @@ export function Feed({ initialChanges, availableServices, availableDocumentTypes
         services={services}
         documentTypes={documentTypes}
         onFilterChange={handleFilterChange}
+        currentCategory={filters.category}
+        currentService={filters.service}
+        currentDocumentType={filters.documentType}
+        currentIncludeFormattingOnly={filters.includeFormattingOnly}
       />
       
       {loading ? (
