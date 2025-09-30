@@ -20,9 +20,11 @@ interface Change {
 
 interface FeedProps {
   initialChanges: Change[];
+  availableServices: string[];
+  availableDocumentTypes: string[];
 }
 
-export function Feed({ initialChanges }: FeedProps) {
+export function Feed({ initialChanges, availableServices, availableDocumentTypes }: FeedProps) {
   const [changes, setChanges] = useState(initialChanges);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -34,14 +36,12 @@ export function Feed({ initialChanges }: FeedProps) {
     documentType: '',
     includeFormattingOnly: false,
   });
+  const [services, setServices] = useState(availableServices);
+  const [documentTypes, setDocumentTypes] = useState(availableDocumentTypes);
   const { setHasPassedFirstLoad } = useScrollContext();
 
   // Ref for the sentinel element
   const observerTarget = useRef<HTMLDivElement>(null);
-
-  // Get unique services and document types for filter dropdowns
-  const services = Array.from(new Set(changes.map(c => c.service))).sort();
-  const documentTypes = Array.from(new Set(changes.map(c => c.documentType))).sort();
 
   // Fetch more changes with current filters
   const fetchMoreChanges = useCallback(async () => {
@@ -87,25 +87,44 @@ export function Feed({ initialChanges }: FeedProps) {
     includeFormattingOnly: boolean;
   }) => {
     setLoading(true);
-    setFilters(newFilters);
+
+    // If category changed, reset service and documentType filters
+    const adjustedFilters = newFilters.category !== filters.category
+      ? { ...newFilters, service: '', documentType: '' }
+      : newFilters;
+
+    setFilters(adjustedFilters);
     setOffset(0);
     setHasMore(true);
-    
+
     try {
+      // If category changed, fetch new filter options
+      if (newFilters.category !== filters.category) {
+        const optionsParams = new URLSearchParams();
+        if (newFilters.category !== 'all') {
+          optionsParams.append('category', newFilters.category);
+        }
+
+        const optionsResponse = await fetch(`/api/filter-options?${optionsParams}`);
+        const optionsData = await optionsResponse.json();
+        setServices(optionsData.services || []);
+        setDocumentTypes(optionsData.documentTypes || []);
+      }
+
       const params = new URLSearchParams();
-      if (newFilters.category !== 'all') params.append('category', newFilters.category);
-      if (newFilters.service) params.append('service', newFilters.service);
-      if (newFilters.documentType) params.append('documentType', newFilters.documentType);
-      params.append('includeFormattingOnly', newFilters.includeFormattingOnly.toString());
+      if (adjustedFilters.category !== 'all') params.append('category', adjustedFilters.category);
+      if (adjustedFilters.service) params.append('service', adjustedFilters.service);
+      if (adjustedFilters.documentType) params.append('documentType', adjustedFilters.documentType);
+      params.append('includeFormattingOnly', adjustedFilters.includeFormattingOnly.toString());
       params.append('limit', PAGE_SIZE.toString());
       params.append('offset', '0');
-      
+
       const response = await fetch(`/api/changes?${params}`);
       const data = await response.json();
-      
+
       setChanges(data.changes || []);
       setOffset(data.changes?.length || 0);
-      
+
       // Check if we have more data to load
       if ((data.changes?.length || 0) >= data.total) {
         setHasMore(false);

@@ -13,7 +13,7 @@ export const runtime = 'nodejs'; // Explicitly use Node.js runtime
 
 async function getChanges() {
   try {
-    
+
     const changes = await prisma.change.findMany({
       where: {
         isMinorChange: false, // By default, don't show minor changes
@@ -21,7 +21,7 @@ async function getChanges() {
       orderBy: { commitDate: 'desc' },
       take: PAGE_SIZE, // Initial load for better performance
     });
-    
+
     return changes.map(change => ({
       ...change,
       category: change.category as 'social' | 'ai',
@@ -33,8 +33,34 @@ async function getChanges() {
   }
 }
 
+async function getFilterOptions() {
+  try {
+    const services = await prisma.change.findMany({
+      distinct: ['service'],
+      select: { service: true },
+      orderBy: { service: 'asc' },
+    });
+
+    const documentTypes = await prisma.change.findMany({
+      distinct: ['documentType'],
+      select: { documentType: true },
+      orderBy: { documentType: 'asc' },
+    });
+
+    return {
+      services: services.map(s => s.service),
+      documentTypes: documentTypes.map(dt => dt.documentType),
+    };
+  } catch (error) {
+    return { services: [], documentTypes: [] };
+  }
+}
+
 export default async function Home() {
-  const changes = await getChanges();
+  const [changes, filterOptions] = await Promise.all([
+    getChanges(),
+    getFilterOptions(),
+  ]);
 
   return (
     <ClientLayout>
@@ -88,7 +114,11 @@ export default async function Home() {
         </header>
 
         <main className="max-w-6xl mx-auto px-4 py-8 pb-20">
-          <Feed initialChanges={changes} />
+          <Feed
+            initialChanges={changes}
+            availableServices={filterOptions.services}
+            availableDocumentTypes={filterOptions.documentTypes}
+          />
         </main>
       </div>
     </ClientLayout>
