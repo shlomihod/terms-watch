@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import * as yaml from 'js-yaml';
 import * as fs from 'fs';
 import * as path from 'path';
+import { loadTrackingConfig, detectAvailabilityPattern } from './tracking';
 
 interface LLMConfig {
   provider: {
@@ -19,13 +20,8 @@ interface LLMConfig {
   };
 }
 
-interface TrackingConfig {
-  problematic_services: string[];
-}
-
 let openai: OpenAI | null = null;
 let config: LLMConfig | null = null;
-let trackingConfig: TrackingConfig | null = null;
 
 function loadConfig(): LLMConfig {
   if (!config) {
@@ -34,20 +30,6 @@ function loadConfig(): LLMConfig {
     config = yaml.load(fileContents) as LLMConfig;
   }
   return config;
-}
-
-function loadTrackingConfig(): TrackingConfig {
-  if (!trackingConfig) {
-    const configPath = path.join(process.cwd(), 'tracking-issues.yaml');
-    try {
-      const fileContents = fs.readFileSync(configPath, 'utf8');
-      trackingConfig = yaml.load(fileContents) as TrackingConfig;
-    } catch {
-      // If file doesn't exist or has issues, use empty config
-      trackingConfig = { problematic_services: [] };
-    }
-  }
-  return trackingConfig;
 }
 
 function getOpenAI(): OpenAI | null {
@@ -98,74 +80,30 @@ async function makeAPICallWithRetry(
   throw lastError;
 }
 
-// Detect page availability issues in diffs
-function detectAvailabilityPattern(diff: string): 'becoming_unavailable' | 'becoming_available' | null {
-  // Error phrases that indicate page unavailability (case-insensitive)
-  const errorPatterns = [
-    /this page (?:isn't|is not|isn't) available/i,
-    /page not found/i,
-    /(?<![\w\/])404(?![\w\.\/])/i,  // 404 not in URLs or filenames
-    /the (?:link|page) may (?:be broken|have been removed)/i,
-    /an? unexpected error (?:has )?occurred/i,
-    /try reloading the page/i,
-    /come back later/i,
-    /temporarily unavailable/i,
-    /error loading/i,
-    /page cannot be displayed/i,
-    /service unavailable/i
-  ];
-
-  // Check each line of the diff
-  const lines = diff.split('\n');
-  let hasAddedError = false;
-  let hasRemovedError = false;
-
-  for (const line of lines) {
-    // Check if line adds an error message (starts with +)
-    if (line.match(/^\+/)) {
-      for (const pattern of errorPatterns) {
-        if (pattern.test(line)) {
-          hasAddedError = true;
-          break;
-        }
-      }
-    }
-    // Check if line removes an error message (starts with -)
-    else if (line.match(/^-/)) {
-      for (const pattern of errorPatterns) {
-        if (pattern.test(line)) {
-          hasRemovedError = true;
-          break;
-        }
-      }
-    }
-  }
-
-  // Determine the pattern
-  if (hasAddedError && !hasRemovedError) {
-    return 'becoming_unavailable';
-  } else if (hasRemovedError && !hasAddedError) {
-    return 'becoming_available';
-  }
-  
-  return null;
-}
-
 export async function generateSummary(diff: string, service: string, documentType: string): Promise<AISummaryResult> {
-  // First check for page availability patterns
+  // Check if this service has "all" condition (mark all changes as minor)
+  const tracking = loadTrackingConfig();
+  const problematicService = tracking.problematic_services.find(ps => ps.name === service);
+
+  if (problematicService?.condition === 'all') {
+    return {
+      isMinorChange: true,
+      summary: `Unstable content (tracking error).`
+    };
+  }
+
+  // Check for page availability patterns
   const availabilityPattern = detectAvailabilityPattern(diff);
-  
+
   if (availabilityPattern) {
-    // Check if this service is known to have frequent availability issues
-    const tracking = loadTrackingConfig();
-    if (tracking.problematic_services.includes(service)) {
-      // This is a known problematic service with availability issues
+    // Check if this service has "availability" condition
+    if (problematicService?.condition === 'availability') {
       return {
         isMinorChange: true,
         summary: `Page availability issue (tracking error).`
       };
     }
-    
+
     // For other services, handle normally
     if (availabilityPattern === 'becoming_unavailable') {
       // Page became unavailable - this is a tracking issue
@@ -174,7 +112,7 @@ export async function generateSummary(diff: string, service: string, documentTyp
         summary: `Page became unavailable (tracking issue).`
       };
     }
-    
+
     if (availabilityPattern === 'becoming_available') {
       // Page became available - might have real content but note the tracking issue
       // Continue to LLM processing but we could add a note

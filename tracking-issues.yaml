@@ -1,4 +1,8 @@
-# Services that frequently have page availability issues
-# These will be automatically marked as minor changes when availability patterns are detected
+# Services with tracking or content issues
+# - condition: "availability" - Only mark as minor when page availability issues detected
+# - condition: "all" - Mark all changes as minor (service has unstable/dynamic content)
 problematic_services:
-  - "Llama API"
+  - name: "Llama API"
+    condition: "availability"
+  - name: "Tempo Labs"
+    condition: "all"
