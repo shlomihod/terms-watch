@@ -74,12 +74,12 @@ function DiffLine({ line, index, linePairs, processedIndices }: DiffLineProps) {
     const isDeletion = line.startsWith('-');
 
     if (isAddition || isDeletion) {
-      const { changes, useCharacterLevel } = computeIntraLineDiff(
+      const changes = computeIntraLineDiff(
         linePair.deletedLine,
         linePair.addedLine
       );
 
-      const changeSegments = processIntraLineChanges(changes, isAddition, useCharacterLevel);
+      const changeSegments = processIntraLineChanges(changes, isAddition);
 
       return (
         <div className={className}>
