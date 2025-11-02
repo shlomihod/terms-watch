@@ -58,18 +58,18 @@ export function processIntraLineChanges(
 ): ChangeSegment[] {
   return changes.map((change) => {
     if (change.added && isAddition) {
-      // Added content in addition line
+      // Added content in addition line - GitHub-style prominent highlighting
       return {
         value: change.value,
         type: 'added' as const,
-        className: 'bg-green-100 rounded px-0.5'
+        className: 'bg-green-300 text-green-900 rounded px-0.5 font-medium'
       };
     } else if (change.removed && !isAddition) {
-      // Removed content in deletion line
+      // Removed content in deletion line - GitHub-style prominent highlighting
       return {
         value: change.value,
         type: 'removed' as const,
-        className: 'bg-red-100 rounded px-0.5'
+        className: 'bg-red-300 text-red-900 rounded px-0.5 font-medium'
       };
     } else if (!change.added && !change.removed) {
       // Unchanged content
