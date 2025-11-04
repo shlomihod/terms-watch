@@ -86,7 +86,7 @@ export function ChangeCard({ change }: ChangeCardProps) {
             </span>
           )}
         </div>
-        <div className="flex items-center gap-5">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 sm:gap-5">
           <button
             onClick={handleCopyLink}
             className="flex items-center gap-1 text-gray-600 hover:text-gray-900 text-sm transition-colors"
