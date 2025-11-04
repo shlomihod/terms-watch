@@ -194,37 +194,42 @@ export function Feed({ initialChanges, availableServices, availableDocumentTypes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Track which hash has been scrolled to prevent multiple attempts
+  const scrolledToHash = useRef<string | null>(null);
+
   // Handle URL hash for direct links (from RSS feed)
   useEffect(() => {
     const checkForHash = async () => {
       const hash = window.location.hash.slice(1); // Remove the #
-      if (!hash) return;
-      
+      if (!hash || scrolledToHash.current === hash) return;
+
       // Try to find the element
       let element = document.getElementById(hash);
       let attempts = 0;
       const maxAttempts = 20; // Limit attempts to avoid infinite loop
-      
+
       // Keep loading more content until we find the element
       while (!element && hasMore && attempts < maxAttempts) {
         await fetchMoreChanges();
-        // Wait a bit for DOM to update
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Wait for next browser frame for DOM to update
+        await new Promise(resolve => requestAnimationFrame(resolve));
         element = document.getElementById(hash);
         attempts++;
       }
-      
+
       // If element is found, scroll to it
       if (element) {
-        setTimeout(() => {
-          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 300);
+        scrolledToHash.current = hash;
+        // Use requestAnimationFrame for better browser timing
+        requestAnimationFrame(() => {
+          element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
       }
     };
-    
+
     // Check on mount and when changes are loaded
     checkForHash();
-  }, [changes.length]); // Re-run when changes array updates
+  }, [changes.length, fetchMoreChanges, hasMore]); // Re-run when changes array updates
 
   return (
     <>
