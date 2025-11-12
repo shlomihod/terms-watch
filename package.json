@@ -7,9 +7,12 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
+    "type-check": "tsc --noEmit",
+    "check": "npm run type-check && npm run lint",
     "postinstall": "prisma generate",
     "clean:db": "tsx scripts/clean-database.ts",
-    "reset:db": "tsx scripts/reset-database.ts"
+    "reset:db": "tsx scripts/reset-database.ts",
+    "prepare": "husky"
   },
   "dependencies": {
     "@octokit/rest": "^22.0.0",
@@ -38,6 +41,7 @@
     "@types/react-dom": "^19.1.9",
     "eslint": "^9.35.0",
     "eslint-config-next": "^15.5.3",
+    "husky": "^9.1.7",
     "tailwindcss": "^4.1.13",
     "tsx": "^4.20.5",
     "typescript": "^5"
