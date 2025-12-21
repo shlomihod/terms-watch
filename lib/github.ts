@@ -30,7 +30,7 @@ const REPOS = [
   },
   {
     owner: 'OpenTermsArchive',
-    repo: 'GenAI-versions',
+    repo: 'genai-contrib-versions',
     category: 'ai' as const,
   },
 ];
@@ -40,6 +40,16 @@ export async function getLatestCommits(repo: string, since?: string): Promise<Co
   if (!repoInfo) throw new Error(`Unknown repo: ${repo}`);
 
   try {
+    const sinceDate = since ? new Date(since) : null;
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    // Determine if this is a historical backfill or incremental update
+    // GitHub API 'since' param filters by committer date, not author date
+    // For repos that were rebased/restructured, this causes old commits to be missed
+    // So for historical backfills (>30 days), we fetch all and filter by author date
+    const isHistoricalBackfill = sinceDate && sinceDate < thirtyDaysAgo;
+
     const params: {
       owner: string;
       repo: string;
@@ -51,12 +61,18 @@ export async function getLatestCommits(repo: string, since?: string): Promise<Co
       per_page: 100,
     };
 
-    if (since) {
+    // Only use 'since' param for recent dates (incremental updates)
+    if (since && !isHistoricalBackfill) {
       params.since = since;
     }
 
-    const commits = await octokit.paginate(octokit.repos.listCommits, params);
-    
+    const allCommits = await octokit.paginate(octokit.repos.listCommits, params);
+
+    // For historical backfill, filter by author date in code
+    const commits = (isHistoricalBackfill && sinceDate)
+      ? allCommits.filter(c => new Date(c.commit.author?.date || '') >= sinceDate)
+      : allCommits;
+
     const commitInfos: CommitInfo[] = [];
 
     for (const commit of commits) {
