@@ -53,6 +53,10 @@ prompts:
 
     - Capitalization or punctuation-only changes
 
+    - Rendering artifacts from web scraping: a single word or short phrase repeated many times in sequence, or known font/display test strings (e.g., 'mmMwWLliI0fiflO&1')
+
+    - Entire document content replaced with only a title or near-empty page (tracking/scraping error, not a real policy removal)
+
 
     Return ONLY valid JSON in this exact format:
 
