@@ -22,9 +22,10 @@ interface FeedProps {
   initialChanges: Change[];
   availableServices: string[];
   availableDocumentTypes: string[];
+  scrollToCommitId?: string;
 }
 
-export function Feed({ initialChanges, availableServices, availableDocumentTypes }: FeedProps) {
+export function Feed({ initialChanges, availableServices, availableDocumentTypes, scrollToCommitId }: FeedProps) {
   const [changes, setChanges] = useState(initialChanges);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -194,42 +195,37 @@ export function Feed({ initialChanges, availableServices, availableDocumentTypes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Track which hash has been scrolled to prevent multiple attempts
-  const scrolledToHash = useRef<string | null>(null);
+  // Track whether we've already scrolled to the target commit
+  const scrolledToCommit = useRef<string | null>(null);
 
-  // Handle URL hash for direct links (from RSS feed)
+  // Handle scrollToCommitId prop for direct links
   useEffect(() => {
-    const checkForHash = async () => {
-      const hash = window.location.hash.slice(1); // Remove the #
-      if (!hash || scrolledToHash.current === hash) return;
+    const scrollToTarget = async () => {
+      if (!scrollToCommitId || scrolledToCommit.current === scrollToCommitId) return;
 
       // Try to find the element
-      let element = document.getElementById(hash);
+      let element = document.getElementById(scrollToCommitId);
       let attempts = 0;
-      const maxAttempts = 20; // Limit attempts to avoid infinite loop
+      const maxAttempts = 20;
 
       // Keep loading more content until we find the element
       while (!element && hasMore && attempts < maxAttempts) {
         await fetchMoreChanges();
-        // Wait for next browser frame for DOM to update
         await new Promise(resolve => requestAnimationFrame(resolve));
-        element = document.getElementById(hash);
+        element = document.getElementById(scrollToCommitId);
         attempts++;
       }
 
-      // If element is found, scroll to it
       if (element) {
-        scrolledToHash.current = hash;
-        // Use requestAnimationFrame for better browser timing
+        scrolledToCommit.current = scrollToCommitId;
         requestAnimationFrame(() => {
           element.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
       }
     };
 
-    // Check on mount and when changes are loaded
-    checkForHash();
-  }, [changes.length, fetchMoreChanges, hasMore]); // Re-run when changes array updates
+    scrollToTarget();
+  }, [scrollToCommitId, changes.length, fetchMoreChanges, hasMore]);
 
   return (
     <>

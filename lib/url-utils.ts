@@ -16,7 +16,7 @@ export function getAppBaseUrl(): string {
  */
 export function getChangeShareLink(commitId: string): string {
   const baseUrl = getAppBaseUrl();
-  return `${baseUrl}#${commitId}`;
+  return `${baseUrl}/change/${commitId}`;
 }
 
 /**

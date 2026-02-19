@@ -63,7 +63,7 @@ export async function GET() {
       feed.addItem({
         title: `${change.service} - ${change.documentType}`,
         id: change.id,
-        link: `${siteUrl}#${commitId}`,
+        link: `${siteUrl}/change/${commitId}`,
         description: change.diffSummary || `${change.service} updated their ${change.documentType}`,
         content: htmlContent,
         date: change.commitDate,
