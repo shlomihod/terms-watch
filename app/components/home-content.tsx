@@ -60,7 +60,7 @@ export function HomeContent({ changes, filterOptions, scrollToCommitId }: HomeCo
                 rel="noopener noreferrer"
                 className="underline hover:text-gray-800"
               >
-                Generative AI
+                Generative AI Governance Archive
               </a>
               {' '}collections.
             </p>
