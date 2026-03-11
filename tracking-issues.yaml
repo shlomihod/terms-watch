@@ -4,5 +4,3 @@
 problematic_services:
   - name: "Llama API"
     condition: "availability"
-  - name: "Tempo Labs"
-    condition: "all"
