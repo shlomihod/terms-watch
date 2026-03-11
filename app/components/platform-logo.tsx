@@ -78,7 +78,9 @@ export function PlatformLogo({ service, size = 16 }: PlatformLogoProps) {
     'fireworks ai': 'siFirebase', // Similar
     'le chat': 'siMistralai',
     'mistral ai': 'siMistralai',
+    'meta ai': 'siMeta',
     'llama api': 'siMeta',
+    'deepseek': 'deepseek',
     'qwen chat': 'siAlibaba',
     'replicate': 'siReplicate',
     'wenxinyiyan': 'siBaidu',
