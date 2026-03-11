@@ -96,8 +96,8 @@ export async function getLatestCommits(repo: string, since?: string): Promise<Co
               filename: file.filename,
               patch: file.patch,
               status: file.status as 'added' | 'removed' | 'modified' | 'renamed',
-              service: formatServiceName(service),
-              documentType: formatDocumentType(documentName),
+              service,
+              documentType: documentName,
               category: repoInfo.category,
             });
           }
@@ -121,61 +121,6 @@ export async function getLatestCommits(repo: string, since?: string): Promise<Co
   }
 }
 
-function formatServiceName(name: string): string {
-  // Handle special cases
-  const serviceMap: Record<string, string> = {
-    'facebook': 'Facebook',
-    'instagram': 'Instagram',
-    'x': 'X',
-    'twitter': 'X',
-    'youtube': 'YouTube',
-    'tiktok': 'TikTok',
-    'linkedin': 'LinkedIn',
-    'snapchat': 'Snapchat',
-    'pinterest': 'Pinterest',
-    'reddit': 'Reddit',
-    'whatsapp': 'WhatsApp',
-    'chatgpt': 'ChatGPT',
-    'claude.ai': 'Claude',
-    'claude': 'Claude',
-    'cursor': 'Cursor',
-    'github copilot': 'GitHub Copilot',
-    'github-copilot': 'GitHub Copilot',
-    'bard': 'Google Bard',
-    'midjourney': 'Midjourney',
-    'dall-e': 'DALL-E',
-    'perplexity': 'Perplexity',
-    'copilot': 'Microsoft Copilot',
-  };
-
-  const lower = name.toLowerCase();
-  return serviceMap[lower] || name.split('-').map(word => 
-    word.charAt(0).toUpperCase() + word.slice(1)
-  ).join(' ');
-}
-
-function formatDocumentType(name: string): string {
-  // Handle common document types
-  const typeMap: Record<string, string> = {
-    'terms': 'Terms of Service',
-    'terms-of-service': 'Terms of Service',
-    'privacy': 'Privacy Policy',
-    'privacy-policy': 'Privacy Policy',
-    'community-guidelines': 'Community Guidelines',
-    'guidelines': 'Community Guidelines',
-    'cookies': 'Cookie Policy',
-    'cookie-policy': 'Cookie Policy',
-    'data-policy': 'Data Policy',
-    'acceptable-use': 'Acceptable Use Policy',
-    'developer-terms': 'Developer Terms',
-    'api-terms': 'API Terms',
-  };
-
-  const lower = name.toLowerCase();
-  return typeMap[lower] || name.split('-').map(word => 
-    word.charAt(0).toUpperCase() + word.slice(1)
-  ).join(' ');
-}
 
 export async function getRepoList() {
   return REPOS;
