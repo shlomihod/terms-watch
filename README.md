@@ -23,7 +23,7 @@ Terms Watch provides an easy-to-read interface for monitoring legal document cha
 
 Terms Watch monitors two collections from Open Terms Archive:
 - [Platform Governance Archive](https://opentermsarchive.org/en/collections/pga/) - Major social media and platform services
-- [Generative AI](https://opentermsarchive.org/en/collections/genai/) - AI services and platforms
+- [Generative AI Governance Archive](https://opentermsarchive.org/en/collections/genai-eu/) - AI services and platforms
 
 ## Setup
 
