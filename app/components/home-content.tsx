@@ -55,7 +55,7 @@ export function HomeContent({ changes, filterOptions, scrollToCommitId }: HomeCo
               </a>
               {' '}and{' '}
               <a
-                href="https://opentermsarchive.org/en/collections/genai/"
+                href="https://opentermsarchive.org/en/collections/genai-eu/"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="underline hover:text-gray-800"
