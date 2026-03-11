@@ -30,7 +30,7 @@ const REPOS = [
   },
   {
     owner: 'OpenTermsArchive',
-    repo: 'genai-contrib-versions',
+    repo: 'genai-eu-versions',
     category: 'ai' as const,
   },
 ];
