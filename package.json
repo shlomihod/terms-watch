@@ -20,7 +20,7 @@
     "@vercel/analytics": "^1.5.0",
     "@vercel/speed-insights": "^1.2.0",
     "date-fns": "^4.1.0",
-    "diff": "^8.0.2",
+    "diff": "^8.0.3",
     "feed": "^5.1.0",
     "js-yaml": "^4.1.0",
     "lucide-react": "^0.544.0",
