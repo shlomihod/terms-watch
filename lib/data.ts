@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { prisma } from '@/lib/db';
 import { PAGE_SIZE } from '@/lib/constants';
 
@@ -45,7 +46,7 @@ export async function getFilterOptions() {
   }
 }
 
-export async function getChangeByCommitPrefix(commitId: string) {
+export const getChangeByCommitPrefix = cache(async (commitId: string) => {
   try {
     const change = await prisma.change.findFirst({
       where: {
@@ -53,6 +54,33 @@ export async function getChangeByCommitPrefix(commitId: string) {
       },
     });
     return change;
+  } catch (error) {
+    return null;
+  }
+});
+
+export async function getChangesIncludingCommit(commitIdPrefix: string) {
+  const target = await getChangeByCommitPrefix(commitIdPrefix);
+  if (!target) return null;
+
+  try {
+    const changes = await prisma.change.findMany({
+      where: {
+        isMinorChange: false,
+        commitDate: { gte: target.commitDate },
+      },
+      orderBy: { commitDate: 'desc' },
+    });
+
+    return {
+      target,
+      changes: changes.map(change => ({
+        ...change,
+        category: change.category as 'social' | 'ai',
+        commitDate: change.commitDate.toISOString(),
+        createdAt: change.createdAt.toISOString(),
+      })),
+    };
   } catch (error) {
     return null;
   }

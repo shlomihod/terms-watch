@@ -1,5 +1,10 @@
 import { Metadata } from 'next';
-import { getChanges, getFilterOptions, getChangeByCommitPrefix } from '@/lib/data';
+import {
+  getChanges,
+  getFilterOptions,
+  getChangeByCommitPrefix,
+  getChangesIncludingCommit,
+} from '@/lib/data';
 import { HomeContent } from '@/app/components/home-content';
 
 export const dynamic = 'force-dynamic';
@@ -42,14 +47,25 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function ChangePage({ params }: PageProps) {
   const { commitId } = await params;
-  const [changes, filterOptions] = await Promise.all([
-    getChanges(),
+  const [result, filterOptions] = await Promise.all([
+    getChangesIncludingCommit(commitId),
     getFilterOptions(),
   ]);
 
+  if (!result) {
+    const changes = await getChanges();
+    return (
+      <HomeContent
+        changes={changes}
+        filterOptions={filterOptions}
+        notFoundCommitId={commitId}
+      />
+    );
+  }
+
   return (
     <HomeContent
-      changes={changes}
+      changes={result.changes}
       filterOptions={filterOptions}
       scrollToCommitId={commitId}
     />
