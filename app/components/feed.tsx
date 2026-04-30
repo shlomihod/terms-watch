@@ -198,34 +198,18 @@ export function Feed({ initialChanges, availableServices, availableDocumentTypes
   // Track whether we've already scrolled to the target commit
   const scrolledToCommit = useRef<string | null>(null);
 
-  // Handle scrollToCommitId prop for direct links
+  // Scroll to the target commit if it's already in the rendered feed.
+  // The server now ships an initial window of changes that includes the target,
+  // so we never need to fetch more here.
   useEffect(() => {
-    const scrollToTarget = async () => {
-      if (!scrollToCommitId || scrolledToCommit.current === scrollToCommitId) return;
-
-      // Try to find the element
-      let element = document.getElementById(scrollToCommitId);
-      let attempts = 0;
-      const maxAttempts = 20;
-
-      // Keep loading more content until we find the element
-      while (!element && hasMore && attempts < maxAttempts) {
-        await fetchMoreChanges();
-        await new Promise(resolve => requestAnimationFrame(resolve));
-        element = document.getElementById(scrollToCommitId);
-        attempts++;
-      }
-
-      if (element) {
-        scrolledToCommit.current = scrollToCommitId;
-        requestAnimationFrame(() => {
-          element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        });
-      }
-    };
-
-    scrollToTarget();
-  }, [scrollToCommitId, changes.length, fetchMoreChanges, hasMore]);
+    if (!scrollToCommitId || scrolledToCommit.current === scrollToCommitId) return;
+    const element = document.getElementById(scrollToCommitId);
+    if (!element) return;
+    scrolledToCommit.current = scrollToCommitId;
+    requestAnimationFrame(() => {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [scrollToCommitId, changes.length]);
 
   return (
     <>

@@ -1,6 +1,7 @@
 import { Feed } from '@/app/components/feed';
 import { EmailSubscription } from '@/app/components/email-subscription';
 import { ClientLayout } from '@/app/components/client-layout';
+import { NotFoundBanner } from '@/app/components/not-found-banner';
 import { Bot } from 'lucide-react';
 
 interface Change {
@@ -22,9 +23,10 @@ interface HomeContentProps {
     documentTypes: string[];
   };
   scrollToCommitId?: string;
+  notFoundCommitId?: string;
 }
 
-export function HomeContent({ changes, filterOptions, scrollToCommitId }: HomeContentProps) {
+export function HomeContent({ changes, filterOptions, scrollToCommitId, notFoundCommitId }: HomeContentProps) {
   return (
     <ClientLayout>
       <div className="min-h-screen bg-white">
@@ -77,6 +79,7 @@ export function HomeContent({ changes, filterOptions, scrollToCommitId }: HomeCo
         </header>
 
         <main className="max-w-6xl mx-auto px-4 py-8 pb-20">
+          {notFoundCommitId && <NotFoundBanner commitId={notFoundCommitId} />}
           <Feed
             initialChanges={changes}
             availableServices={filterOptions.services}
