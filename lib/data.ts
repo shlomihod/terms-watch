@@ -46,7 +46,13 @@ export async function getFilterOptions() {
   }
 }
 
+// Commit IDs are always stored as the first 8 chars of a git SHA. Validating
+// the prefix here keeps malformed/empty input from running open-ended
+// startsWith scans, and matches the API route's contract.
+const COMMIT_PREFIX_RE = /^[a-f0-9]{8}$/i;
+
 export const getChangeByCommitPrefix = cache(async (commitId: string) => {
+  if (!COMMIT_PREFIX_RE.test(commitId)) return null;
   try {
     const change = await prisma.change.findFirst({
       where: {

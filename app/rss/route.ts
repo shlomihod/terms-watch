@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { Feed } from 'feed';
+import escapeHtml from 'escape-html';
 import { prisma } from '@/lib/db';
 import { RSS_FEED_SIZE } from '@/lib/constants';
 
@@ -45,18 +46,25 @@ export async function GET() {
     changes.forEach(change => {
       // Extract commit ID (first 8 chars) for anchor link
       const commitId = change.id.substring(0, 8);
-      
-      // Create HTML content for better email rendering
+
+      // DB-derived fields (service, documentType, diffSummary) originate from
+      // upstream commits and LLM output and end up rendered as HTML by feed
+      // readers, so they must be HTML-escaped before interpolation.
+      const service = escapeHtml(change.service);
+      const documentType = escapeHtml(change.documentType);
+      const categoryLabel = change.category === 'ai' ? 'AI Services' : 'Social Media';
+      const diffSummary = change.diffSummary ? escapeHtml(change.diffSummary) : null;
+
       const htmlContent = `
         <div>
-          <h3>${change.service} - ${change.documentType}</h3>
-          <p><strong>Category:</strong> ${change.category === 'ai' ? 'AI Services' : 'Social Media'}</p>
-          <p><strong>Date:</strong> ${change.commitDate.toLocaleDateString()}</p>${change.diffSummary ? `
+          <h3>${service} - ${documentType}</h3>
+          <p><strong>Category:</strong> ${categoryLabel}</p>
+          <p><strong>Date:</strong> ${change.commitDate.toLocaleDateString()}</p>${diffSummary ? `
           <div>
             <h4>Summary of Changes:</h4>
-            <p>${change.diffSummary}</p>
+            <p>${diffSummary}</p>
           </div>` : `
-          <p>${change.service} updated their ${change.documentType}</p>`}
+          <p>${service} updated their ${documentType}</p>`}
         </div>
       `.trim();
 
@@ -69,7 +77,7 @@ export async function GET() {
         date: change.commitDate,
         published: change.commitDate,
         category: [
-          { name: change.category === 'ai' ? 'AI Services' : 'Social Media' },
+          { name: categoryLabel },
           { name: change.documentType },
           { name: change.service },
         ],

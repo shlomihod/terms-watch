@@ -9,30 +9,38 @@ export async function GET(request: NextRequest) {
     const documentType = searchParams.get('documentType');
     const days = searchParams.get('days');
     const includeFormattingOnly = searchParams.get('includeFormattingOnly') === 'true';
-    const limit = parseInt(searchParams.get('limit') || '200');
-    const offset = parseInt(searchParams.get('offset') || '0');
+
+    // Defensive parse: reject NaN and negative values so a malformed query
+    // can't produce Invalid Date / negative skip and crash Prisma in a loop.
+    const limitParam = parseInt(searchParams.get('limit') ?? '');
+    const limit = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : 200;
+    const offsetParam = parseInt(searchParams.get('offset') ?? '');
+    const offset = Number.isFinite(offsetParam) && offsetParam >= 0 ? offsetParam : 0;
 
     // Build where clause
     const where: Record<string, unknown> = {};
-    
+
     if (category && category !== 'all') {
       where.category = category;
     }
-    
+
     if (service) {
       where.service = service;
     }
-    
+
     if (documentType) {
       where.documentType = documentType;
     }
-    
+
     if (days) {
-      const daysAgo = new Date();
-      daysAgo.setDate(daysAgo.getDate() - parseInt(days));
-      where.commitDate = {
-        gte: daysAgo,
-      };
+      const daysParam = parseInt(days);
+      if (Number.isFinite(daysParam) && daysParam >= 0) {
+        const daysAgo = new Date();
+        daysAgo.setDate(daysAgo.getDate() - daysParam);
+        where.commitDate = {
+          gte: daysAgo,
+        };
+      }
     }
     
     // Filter formatting-only changes
