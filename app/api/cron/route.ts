@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { timingSafeEqual } from 'crypto';
 import { prisma } from '@/lib/db';
 import { getLatestCommits, getRepoList, fetchFileDiff } from '@/lib/github';
 import { generateSummary } from '@/lib/ai';
@@ -7,9 +8,22 @@ import { generateSummary } from '@/lib/ai';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
-  // Verify cron secret
-  const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) {
+    // Fail closed: never accept requests when the secret is unset.
+    return NextResponse.json(
+      { error: 'Server misconfigured' },
+      { status: 500 }
+    );
+  }
+
+  const authHeader = request.headers.get('authorization') ?? '';
+  const expected = Buffer.from(`Bearer ${cronSecret}`);
+  const provided = Buffer.from(authHeader);
+  if (
+    provided.length !== expected.length ||
+    !timingSafeEqual(provided, expected)
+  ) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
