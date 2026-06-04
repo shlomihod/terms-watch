@@ -113,10 +113,8 @@ export async function generateSummary(diff: string, service: string, documentTyp
       };
     }
 
-    if (availabilityPattern === 'becoming_available') {
-      // Page became available - might have real content but note the tracking issue
-      // Continue to LLM processing but we could add a note
-      }
+    // becoming_available falls through to normal LLM processing below: the page
+    // may now have real content worth summarizing.
   }
 
   const client = getOpenAI();

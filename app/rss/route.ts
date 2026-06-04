@@ -3,6 +3,7 @@ import { Feed } from 'feed';
 import escapeHtml from 'escape-html';
 import { prisma } from '@/lib/db';
 import { RSS_FEED_SIZE } from '@/lib/constants';
+import { getAppBaseUrl, extractCommitId } from '@/lib/url-utils';
 
 export async function GET() {
   try {
@@ -16,7 +17,7 @@ export async function GET() {
       },
     });
 
-    const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://terms-watch.vercel.app';
+    const siteUrl = getAppBaseUrl();
     const feedUrl = `${siteUrl}/rss`;
 
     // Create feed instance with site metadata
@@ -33,8 +34,6 @@ export async function GET() {
       generator: 'Feed for Node.js',
       feedLinks: {
         rss2: feedUrl,
-        json: `${siteUrl}/api/feed`, // Keep reference to old JSON feed if needed
-        atom: `${siteUrl}/api/atom`, // Future atom feed if needed
       },
       author: {
         name: 'Terms Watch',
@@ -45,7 +44,7 @@ export async function GET() {
     // Add each change as a feed item
     changes.forEach(change => {
       // Extract commit ID (first 8 chars) for anchor link
-      const commitId = change.id.substring(0, 8);
+      const commitId = extractCommitId(change.id);
 
       // DB-derived fields (service, documentType, diffSummary) originate from
       // upstream commits and LLM output and end up rendered as HTML by feed

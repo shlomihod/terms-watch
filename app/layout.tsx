@@ -1,13 +1,20 @@
 import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import { getAppBaseUrl } from "@/lib/url-utils";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(getAppBaseUrl()),
   title: "Terms Watch - Track Terms of Service Changes",
   description: "Monitor changes to Terms of Service, Privacy Policies, and Community Guidelines across major social media platforms and AI services.",
   keywords: "terms of service, privacy policy, community guidelines, social media, AI, changes, monitoring",
   authors: [{ name: "Terms Watch" }],
+  alternates: {
+    types: {
+      'application/rss+xml': [{ url: '/rss', title: 'Terms Watch RSS Feed' }],
+    },
+  },
   openGraph: {
     title: "Terms Watch",
     description: "Track changes to Terms of Service across major platforms",

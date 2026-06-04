@@ -23,15 +23,36 @@ export async function getChanges() {
   }
 }
 
-export async function getFilterOptions() {
+export interface FilterOptionsFilters {
+  category?: string;
+  service?: string;
+  documentType?: string;
+}
+
+// Services are scoped by category + documentType; document types by category +
+// service. This lets each dropdown reflect what's still selectable given the
+// other active filters. Called with no args for the unfiltered (full) lists.
+export async function getFilterOptions(filters: FilterOptionsFilters = {}) {
   try {
+    const { category, service, documentType } = filters;
+
+    const servicesWhere: Record<string, unknown> = {};
+    if (category && category !== 'all') servicesWhere.category = category;
+    if (documentType) servicesWhere.documentType = documentType;
+
+    const documentTypesWhere: Record<string, unknown> = {};
+    if (category && category !== 'all') documentTypesWhere.category = category;
+    if (service) documentTypesWhere.service = service;
+
     const services = await prisma.change.findMany({
+      where: servicesWhere,
       distinct: ['service'],
       select: { service: true },
       orderBy: { service: 'asc' },
     });
 
     const documentTypes = await prisma.change.findMany({
+      where: documentTypesWhere,
       distinct: ['documentType'],
       select: { documentType: true },
       orderBy: { documentType: 'asc' },
