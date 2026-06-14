@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import * as yaml from 'js-yaml';
 import * as fs from 'fs';
 import * as path from 'path';
-import { loadTrackingConfig, detectAvailabilityPattern } from './tracking';
+import { loadTrackingConfig, detectAvailabilityPattern, detectContentArtifact } from './tracking';
 
 interface LLMConfig {
   provider: {
@@ -81,6 +81,17 @@ async function makeAPICallWithRetry(
 }
 
 export async function generateSummary(diff: string, service: string, documentType: string): Promise<AISummaryResult> {
+  // Known "flip-flop" scraping artifact (exact net-change block match). Checked FIRST: it
+  // is the most specific, highest-confidence signal, so it must win over the fuzzy
+  // availability heuristic below — a block that incidentally contains availability phrasing
+  // should still be labeled as the content artifact, not routed to the availability branch.
+  if (detectContentArtifact(diff, service, documentType)) {
+    return {
+      isMinorChange: true,
+      summary: `Unstable content (tracking error).`
+    };
+  }
+
   // Check if this service has "all" condition (mark all changes as minor)
   const tracking = loadTrackingConfig();
   const problematicService = tracking.problematic_services.find(ps => ps.name === service);
