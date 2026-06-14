@@ -4,3 +4,24 @@
 problematic_services:
   - name: "Llama API"
     condition: "availability"
+
+# Exact-block "flip-flop" scraping artifacts: a trailing block the scraper intermittently
+# captures/drops. Matched by EXACT net-change (multiset) equality on non-blank body lines,
+# scoped by service (+ optional documentType); classified "Unstable content (tracking error)."
+# EXACT-MATCH RULES: every marker/block string is case-sensitive and byte-exact. Always
+# double-quote. Never use a block scalar (| adds \n, >- folds wraps) — both break matching.
+content_artifacts:
+  - name: qwen-cookie-consent
+    services: ["Qwen Chat"]
+    documentType: "Trackers Policy"
+    marker: "We'd like to use cookies to remember your preferences"
+    block:
+      - "Cookie Notice"
+      - "We'd like to use cookies to remember your preferences and show relevant content. You can accept all cookies for a fully personalized experience, or select only the strictly necessary ones to keep Qwen Studio running securely. For more details, please read our [Cookie Notice](https://qwen.ai/cookies-notice)."
+      - "Accept all cookiesAccept all strictly necessary cookies"
+  - name: other-ways-to-get-help
+    services: ["Instagram", "Threads"]
+    marker: "Other ways to get help"
+    block:
+      - "Other ways to get help"
+      - "----------------------"   # 22-dash markdown setext underline (heading length)
