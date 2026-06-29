@@ -25,3 +25,9 @@ content_artifacts:
     block:
       - "Other ways to get help"
       - "----------------------"   # 22-dash markdown setext underline (heading length)
+  - name: tiktok-uk-ads-privacy-notice   # single notice line toggled in/out since 2026-05-30
+    services: ["TikTok"]
+    documentType: "Privacy Policy"
+    marker: "We are changing how we show ads to UK users"
+    block:
+      - "_We are changing how we show ads to UK users. Our new [Privacy Policy for UK users](https://www.tiktok.com/legal/page/global/privacy-policy-eea-new/en) comes into effect on 11 November 2026 or, if you are in the UK, when you make a choice about ads._"
