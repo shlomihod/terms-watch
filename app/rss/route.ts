@@ -101,7 +101,12 @@ export async function GET() {
       status: 200,
       headers: {
         'Content-Type': 'application/rss+xml; charset=utf-8',
-        'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
+        // s-maxage lets Vercel's edge cache serve the feed, so most reader polls
+        // never reach the DB (plain max-age is browser-only and would not be
+        // edge-cached). stale-while-revalidate refreshes it in the background;
+        // stale-if-error keeps serving the last good feed if the DB is down.
+        'Cache-Control':
+          'public, max-age=0, s-maxage=3600, stale-while-revalidate=86400, stale-if-error=86400',
       },
     });
   } catch (error) {
