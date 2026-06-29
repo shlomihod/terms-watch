@@ -7,13 +7,23 @@ import { getAppBaseUrl, extractCommitId } from '@/lib/url-utils';
 
 export async function GET() {
   try {
-    // Fetch latest changes for RSS feed
+    // Fetch latest changes for RSS feed. Select only the fields rendered below —
+    // the feed never includes the raw diff, so fetching diffContent (the widest
+    // column) here would be ~290KB of pure waste per request.
     const changes = await prisma.change.findMany({
       orderBy: { commitDate: 'desc' },
       take: RSS_FEED_SIZE,
       where: {
         processed: true,
         isMinorChange: false, // Exclude minor changes from RSS feed
+      },
+      select: {
+        id: true,
+        service: true,
+        documentType: true,
+        category: true,
+        commitDate: true,
+        diffSummary: true,
       },
     });
 
@@ -91,7 +101,12 @@ export async function GET() {
       status: 200,
       headers: {
         'Content-Type': 'application/rss+xml; charset=utf-8',
-        'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
+        // s-maxage lets Vercel's edge cache serve the feed, so most reader polls
+        // never reach the DB (plain max-age is browser-only and would not be
+        // edge-cached). stale-while-revalidate refreshes it in the background;
+        // stale-if-error keeps serving the last good feed if the DB is down.
+        'Cache-Control':
+          'public, max-age=0, s-maxage=3600, stale-while-revalidate=86400, stale-if-error=86400',
       },
     });
   } catch (error) {

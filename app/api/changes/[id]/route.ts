@@ -8,22 +8,25 @@ export async function GET(
   try {
     const { id } = await params;
 
-    // Validate ID format (must be exactly 8 characters)
-    if (!id || id.length !== 8) {
+    // Change ids are "<sha8>-<sanitized-filename>-<timestamp>", all within
+    // [a-zA-Z0-9-]. Reject anything off that charset and bound the length.
+    if (!id || id.length > 80 || !/^[a-zA-Z0-9-]+$/.test(id)) {
       return NextResponse.json(
-        { error: 'Invalid ID format. Expected 8-character commit ID.' },
+        { error: 'Invalid ID format.' },
         { status: 400 }
       );
     }
 
-    // Query database for change with ID starting with the provided prefix
-    const change = await prisma.change.findFirst({
-      where: {
-        id: {
-          startsWith: id,
-        },
-      },
-    });
+    // A full change id is unique → exact match. A bare 8-char commit-SHA prefix
+    // (share links) can match several rows from the same commit, so resolve it
+    // deterministically to the most recent rather than an arbitrary sibling.
+    const change =
+      id.length === 8
+        ? await prisma.change.findFirst({
+            where: { id: { startsWith: id } },
+            orderBy: { commitDate: 'desc' },
+          })
+        : await prisma.change.findUnique({ where: { id } });
 
     // Return 404 if no change found
     if (!change) {

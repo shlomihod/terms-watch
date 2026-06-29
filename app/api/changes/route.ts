@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { CHANGE_LIST_SELECT } from '@/lib/data';
+
+// Hard ceiling on rows per request so a caller can't request the whole table
+// (e.g. ?limit=99999) in one shot. The web UI pages in PAGE_SIZE (15) chunks.
+const MAX_LIMIT = 200;
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,7 +18,10 @@ export async function GET(request: NextRequest) {
     // Defensive parse: reject NaN and negative values so a malformed query
     // can't produce Invalid Date / negative skip and crash Prisma in a loop.
     const limitParam = parseInt(searchParams.get('limit') ?? '');
-    const limit = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : 200;
+    const limit = Math.min(
+      Number.isFinite(limitParam) && limitParam > 0 ? limitParam : MAX_LIMIT,
+      MAX_LIMIT
+    );
     const offsetParam = parseInt(searchParams.get('offset') ?? '');
     const offset = Number.isFinite(offsetParam) && offsetParam >= 0 ? offsetParam : 0;
 
@@ -48,12 +56,14 @@ export async function GET(request: NextRequest) {
       where.isMinorChange = false;
     }
 
-    // Fetch changes
+    // Fetch changes. diffContent is omitted (CHANGE_LIST_SELECT) — the feed
+    // renders summaries and loads each diff on demand via /api/changes/[id].
     const changes = await prisma.change.findMany({
       where,
       orderBy: { commitDate: 'desc' },
       take: limit,
       skip: offset,
+      select: CHANGE_LIST_SELECT,
     });
 
     // Get total count for pagination
@@ -63,7 +73,6 @@ export async function GET(request: NextRequest) {
     const serializedChanges = changes.map(change => ({
       ...change,
       commitDate: change.commitDate.toISOString(),
-      createdAt: change.createdAt.toISOString(),
     }));
 
     return NextResponse.json({

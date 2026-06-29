@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { ChevronDown, ChevronUp, Bot, Link2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { PlatformLogo } from './platform-logo';
@@ -15,7 +15,8 @@ interface ChangeCardProps {
     documentType: string;
     commitDate: string;
     commitUrl: string;
-    diffContent: string;
+    // Absent in feed/list payloads — fetched lazily on first "View Diff".
+    diffContent?: string;
     diffSummary: string | null;
   };
 }
@@ -23,9 +24,37 @@ interface ChangeCardProps {
 export function ChangeCard({ change }: ChangeCardProps) {
   const [showDiff, setShowDiff] = useState(false);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle');
+  // The diff is the widest column, so it isn't shipped with the list. Load it
+  // on demand the first time the user expands this card, then keep it cached.
+  const [diff, setDiff] = useState<string | null>(change.diffContent ?? null);
+  const [diffStatus, setDiffStatus] = useState<'idle' | 'loading' | 'error'>('idle');
 
   // Extract commit ID (first 8 chars) from the change ID
   const commitId = change.id.substring(0, 8);
+
+  const loadDiff = useCallback(async () => {
+    if (diff !== null || diffStatus === 'loading') return;
+    setDiffStatus('loading');
+    try {
+      // Fetch by the full, unique change.id — NOT the 8-char commitId prefix,
+      // which is only the commit SHA and is shared by every file changed in the
+      // same commit. Resolving the diff by the prefix could return a sibling
+      // row's diff.
+      const response = await fetch(`/api/changes/${encodeURIComponent(change.id)}`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      setDiff(data.diffContent ?? '');
+      setDiffStatus('idle');
+    } catch {
+      setDiffStatus('error');
+    }
+  }, [change.id, diff, diffStatus]);
+
+  const handleToggleDiff = () => {
+    const next = !showDiff;
+    setShowDiff(next);
+    if (next) loadDiff();
+  };
 
   // Copy share link to clipboard
   const handleCopyLink = async () => {
@@ -106,7 +135,7 @@ export function ChangeCard({ change }: ChangeCardProps) {
             Source
           </a>
           <button
-            onClick={() => setShowDiff(!showDiff)}
+            onClick={handleToggleDiff}
             className="flex items-center gap-1 text-gray-900 hover:text-black text-sm font-semibold transition-colors"
           >
             <span>View Diff</span>
@@ -114,10 +143,21 @@ export function ChangeCard({ change }: ChangeCardProps) {
           </button>
         </div>
       </footer>
-      
+
       {showDiff && (
         <div className="mt-4 pt-4 border-t border-gray-200">
-          <DiffViewer diff={change.diffContent} />
+          {diffStatus === 'loading' && (
+            <div className="text-gray-500 text-sm py-2">Loading diff…</div>
+          )}
+          {diffStatus === 'error' && (
+            <div className="text-gray-600 text-sm py-2">
+              Failed to load diff.{' '}
+              <button onClick={loadDiff} className="underline hover:text-gray-900">
+                Retry
+              </button>
+            </div>
+          )}
+          {diff !== null && diffStatus !== 'loading' && <DiffViewer diff={diff} />}
         </div>
       )}
     </article>
