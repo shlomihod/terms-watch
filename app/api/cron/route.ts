@@ -51,12 +51,15 @@ export async function GET(request: NextRequest) {
           // Process each file change in the commit
           for (const file of commit.files) {
             try {
-              // Check if we've already processed this specific file in this commit
+              // Check if we've already processed this specific file in this
+              // commit. Existence check only — select just the id so the dedup
+              // loop never pulls the (multi-KB) diff for already-seen files.
               const existing = await prisma.change.findFirst({
-                where: { 
+                where: {
                   commitSha: commit.sha,
                   filename: file.filename
                 },
+                select: { id: true },
               });
 
               if (!existing) {

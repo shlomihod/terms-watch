@@ -1,6 +1,21 @@
 import { cache } from 'react';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { PAGE_SIZE } from '@/lib/constants';
+
+// Projection for feed/list reads. Omits diffContent — by far the widest column
+// (avg ~5.7KB, max ~181KB per row) — because lists only render the summary; the
+// full diff loads on demand per card via /api/changes/[id]. Must cover every
+// field ChangeCard reads except diffContent.
+export const CHANGE_LIST_SELECT = {
+  id: true,
+  service: true,
+  category: true,
+  documentType: true,
+  commitDate: true,
+  commitUrl: true,
+  diffSummary: true,
+} satisfies Prisma.ChangeSelect;
 
 export async function getChanges() {
   try {
@@ -10,13 +25,13 @@ export async function getChanges() {
       },
       orderBy: { commitDate: 'desc' },
       take: PAGE_SIZE,
+      select: CHANGE_LIST_SELECT,
     });
 
     return changes.map(change => ({
       ...change,
       category: change.category as 'social' | 'ai',
       commitDate: change.commitDate.toISOString(),
-      createdAt: change.createdAt.toISOString(),
     }));
   } catch (error) {
     return [];
@@ -72,6 +87,8 @@ export async function getFilterOptions(filters: FilterOptionsFilters = {}) {
 // startsWith scans, and matches the API route's contract.
 const COMMIT_PREFIX_RE = /^[a-f0-9]{8}$/i;
 
+// Callers read only metadata (page <title>/description and the commitDate
+// anchor below), never the diff, so this uses the list projection.
 export const getChangeByCommitPrefix = cache(async (commitId: string) => {
   if (!COMMIT_PREFIX_RE.test(commitId)) return null;
   try {
@@ -79,6 +96,7 @@ export const getChangeByCommitPrefix = cache(async (commitId: string) => {
       where: {
         id: { startsWith: commitId },
       },
+      select: CHANGE_LIST_SELECT,
     });
     return change;
   } catch (error) {
@@ -91,12 +109,17 @@ export async function getChangesIncludingCommit(commitIdPrefix: string) {
   if (!target) return null;
 
   try {
+    // The window spans every change newer than the target so the client can
+    // scroll to it, so row count is unbounded by design. That stays cheap only
+    // because the projection is metadata-only (each diff loads lazily per card);
+    // keep diffContent out of it.
     const changes = await prisma.change.findMany({
       where: {
         isMinorChange: false,
         commitDate: { gte: target.commitDate },
       },
       orderBy: { commitDate: 'desc' },
+      select: CHANGE_LIST_SELECT,
     });
 
     return {
@@ -105,7 +128,6 @@ export async function getChangesIncludingCommit(commitIdPrefix: string) {
         ...change,
         category: change.category as 'social' | 'ai',
         commitDate: change.commitDate.toISOString(),
-        createdAt: change.createdAt.toISOString(),
       })),
     };
   } catch (error) {

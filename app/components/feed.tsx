@@ -13,7 +13,7 @@ interface Change {
   documentType: string;
   commitDate: string;
   commitUrl: string;
-  diffContent: string;
+  diffContent?: string;
   diffSummary: string | null;
   isMinorChange?: boolean;
 }

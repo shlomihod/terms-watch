@@ -7,13 +7,23 @@ import { getAppBaseUrl, extractCommitId } from '@/lib/url-utils';
 
 export async function GET() {
   try {
-    // Fetch latest changes for RSS feed
+    // Fetch latest changes for RSS feed. Select only the fields rendered below —
+    // the feed never includes the raw diff, so fetching diffContent (the widest
+    // column) here would be ~290KB of pure waste per request.
     const changes = await prisma.change.findMany({
       orderBy: { commitDate: 'desc' },
       take: RSS_FEED_SIZE,
       where: {
         processed: true,
         isMinorChange: false, // Exclude minor changes from RSS feed
+      },
+      select: {
+        id: true,
+        service: true,
+        documentType: true,
+        category: true,
+        commitDate: true,
+        diffSummary: true,
       },
     });
 
