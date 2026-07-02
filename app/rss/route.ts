@@ -77,11 +77,15 @@ export async function GET() {
         </div>
       `.trim();
 
+      // The feed lib emits title/description raw inside CDATA. Readers render
+      // description as HTML, so it must use the escaped values (like content
+      // does); titles are plain text in readers, so entity-escaping would show
+      // literally — strip tag-forming chars instead.
       feed.addItem({
-        title: `${change.service} - ${change.documentType}`,
+        title: `${change.service} - ${change.documentType}`.replace(/[<>]/g, ''),
         id: change.id,
         link: `${siteUrl}/change/${commitId}`,
-        description: change.diffSummary || `${change.service} updated their ${change.documentType}`,
+        description: diffSummary || `${service} updated their ${documentType}`,
         content: htmlContent,
         date: change.commitDate,
         published: change.commitDate,

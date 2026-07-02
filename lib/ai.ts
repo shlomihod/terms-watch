@@ -48,6 +48,10 @@ export interface AISummaryResult {
   summary: string;
 }
 
+function escapeRegExp(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 async function makeAPICallWithRetry(
   client: OpenAI,
   requestBody: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming & { reasoning_effort?: 'low' | 'medium' | 'high' | 'minimal' },
@@ -138,12 +142,20 @@ export async function generateSummary(diff: string, service: string, documentTyp
 
   try {
     const cfg = loadConfig();
-    
-    // Replace template variables in the user prompt
-    const userPrompt = cfg.prompts.user_template
-      .replace('{service}', service)
-      .replace('{documentType}', documentType)
-      .replace('{diff}', diff); // Full diff, no truncation
+
+    // Defang <diff>-tag lookalikes in the scraped content so it can't pose as
+    // the template's delimiter (best-effort; the JSON response format and
+    // render-layer escaping are the real guardrails).
+    const safeDiff = diff.replace(/<\s*(\/?)\s*diff\b/gi, '[$1diff');
+
+    // Single-pass, function-form substitution: string-form .replace() would
+    // expand $-patterns ($&, $`, $') occurring in the scraped diff into the
+    // template, and chained calls could re-expand placeholders.
+    const values: Record<string, string> = { service, documentType, diff: safeDiff }; // Full diff, no truncation
+    const userPrompt = cfg.prompts.user_template.replace(
+      /\{(service|documentType|diff)\}/g,
+      (_match, key: string) => values[key]
+    );
 
     const requestBody: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming & { reasoning_effort?: 'low' | 'medium' | 'high' | 'minimal' } = {
       model: cfg.model.name,
@@ -192,8 +204,11 @@ export async function generateSummary(diff: string, service: string, documentTyp
       }
       
       // Check if LLM returned the generic unavailable message pattern
+      // escapeRegExp: a service/documentType containing a regex metachar (e.g.
+      // "(", "+") would make new RegExp throw, and the catch below would then
+      // discard every valid LLM summary for that service.
       const genericPattern = new RegExp(
-        `${service}\\s+${documentType}\\s+page was temporarily unavailable or returned an error when archived\\.?`,
+        `${escapeRegExp(service)}\\s+${escapeRegExp(documentType)}\\s+page was temporarily unavailable or returned an error when archived\\.?`,
         'i'
       );
       if (genericPattern.test(result.summary)) {
