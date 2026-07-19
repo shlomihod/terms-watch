@@ -11,6 +11,7 @@ export interface ContentArtifact {
   name: string;
   marker: string;          // substring present in the block; cheap pre-filter (case-sensitive)
   block: string[];         // EXACT non-blank net-change lines (derived verbatim from the DB)
+  block_b?: string[];      // if set: substitution flip-flop — net change must be exactly block↔block_b (either direction)
   services?: string[];     // optional scope: change.service must be one of these
   documentType?: string;   // optional scope: change.documentType must equal this
 }
@@ -20,7 +21,7 @@ export interface TrackingConfig {
   content_artifacts?: ContentArtifact[];
 }
 
-export type Direction = 'ADD' | 'REMOVE';
+export type Direction = 'ADD' | 'REMOVE' | 'SWAP';
 
 let trackingConfig: TrackingConfig | null = null;
 
@@ -96,14 +97,15 @@ export function detectAvailabilityPattern(diff: string): 'becoming_unavailable' 
 
 // --- Exact-block content-artifact matching ---------------------------------
 // "Flip-flop" scraping artifacts: the scraper intermittently captures/drops a trailing
-// block, each toggle landing as a separate non-minor Change. We classify them by EXACT
-// net-change (multiset) equality against a known block signature (content_artifacts in
-// tracking-issues.yaml). Matching is header-, blank-, and trailing-newline-agnostic by
-// design — do NOT tighten it into a whole-string/header compare.
+// block (or alternates between two variants of a block), each toggle landing as a
+// separate non-minor Change. We classify them by EXACT net-change (multiset) equality
+// against a known block signature (content_artifacts in tracking-issues.yaml). Matching
+// is header-, blank-, and trailing-newline-agnostic by design — do NOT tighten it into
+// a whole-string/header compare.
 
-// Compute the net change of a diff: drop "\ No newline" sentinels, cancel byte-identical
-// +/- lines, return the surviving non-blank side (or null). Single hunk only.
-export function netChange(diff: string): { direction: Direction; lines: string[] } | null {
+// Compute both net sides of a diff: drop "\ No newline" sentinels, cancel byte-identical
+// +/- pairs, drop blank lines. Single hunk only (null otherwise).
+export function netSides(diff: string): { added: string[]; removed: string[] } | null {
   const all = diff.split('\n');
   if (all.filter(l => l.startsWith('@@')).length !== 1) return null; // single hunk only
   const hdr = all.findIndex(l => l.startsWith('@@'));
@@ -122,12 +124,23 @@ export function netChange(diff: string): { direction: Direction; lines: string[]
     if (i >= 0) { rem.splice(i, 1); return false; } // cancel byte-identical pair
     return true;
   });
-  const netRemoved = rem;
-  const addNB = netAdded.filter(l => l.trim() !== '');
-  const remNB = netRemoved.filter(l => l.trim() !== '');
-  if (addNB.length && remNB.length) return null; // mixed = real edit
-  if (!addNB.length && !remNB.length) return null; // empty net = whitespace noise
-  return addNB.length ? { direction: 'ADD', lines: addNB } : { direction: 'REMOVE', lines: remNB };
+  return {
+    added: netAdded.filter(l => l.trim() !== ''),
+    removed: rem.filter(l => l.trim() !== ''),
+  };
+}
+
+// One-directional net change: the surviving non-blank side, or null when the net is
+// empty (whitespace noise) or mixed (a real edit — substitution flip-flops are handled
+// separately via block_b in matchArtifact).
+export function netChange(diff: string): { direction: Direction; lines: string[] } | null {
+  const net = netSides(diff);
+  if (!net) return null;
+  if (net.added.length && net.removed.length) return null; // mixed = real edit
+  if (!net.added.length && !net.removed.length) return null; // empty net = whitespace noise
+  return net.added.length
+    ? { direction: 'ADD', lines: net.added }
+    : { direction: 'REMOVE', lines: net.removed };
 }
 
 export function multisetEqual(a: string[], b: string[]): boolean {
@@ -137,9 +150,10 @@ export function multisetEqual(a: string[], b: string[]): boolean {
   return x.every((v, i) => v === y[i]);
 }
 
-// Does this diff's net change EXACTLY equal the signature's block, with scope satisfied?
+// Does this diff's net change EXACTLY equal the signature, with scope satisfied?
 // Returns the direction (for display/tooling) or null. Scoping (service/documentType) is
-// applied here so callers don't have to pre-filter.
+// applied here so callers don't have to pre-filter. Signatures with block_b are
+// substitution flip-flops: the net change must be exactly block↔block_b (either way).
 export function matchArtifact(
   diff: string,
   sig: ContentArtifact,
@@ -149,6 +163,13 @@ export function matchArtifact(
   if (sig.services && !sig.services.includes(service)) return null;
   if (sig.documentType && sig.documentType !== documentType) return null;
   if (!diff.includes(sig.marker)) return null; // cheap reject before parsing the diff
+  if (sig.block_b) {
+    const net = netSides(diff);
+    if (!net || !net.added.length || !net.removed.length) return null;
+    const ab = multisetEqual(net.removed, sig.block) && multisetEqual(net.added, sig.block_b);
+    const ba = multisetEqual(net.removed, sig.block_b) && multisetEqual(net.added, sig.block);
+    return ab || ba ? 'SWAP' : null;
+  }
   const net = netChange(diff);
   if (!net) return null;
   return multisetEqual(net.lines, sig.block) ? net.direction : null;
@@ -170,7 +191,22 @@ export function validateContentArtifacts(
     if (names.has(s.name)) throw new Error(`Duplicate content_artifacts name: ${s.name}`);
     names.add(s.name);
     if (!s.block.length) throw new Error(`content_artifacts ${s.name}: empty block`);
-    if (!s.block.some(l => l.includes(s.marker)))
+    // Blank lines never survive into net sides (netSides drops them), so a signature
+    // containing one is dead — it can never match any diff.
+    if ([...s.block, ...(s.block_b ?? [])].some(l => l.trim() === ''))
+      throw new Error(`content_artifacts ${s.name}: blank block line can never match (net sides drop blank lines)`);
+    if (s.block_b) {
+      if (!s.block_b.length) throw new Error(`content_artifacts ${s.name}: empty block_b`);
+      // A line present in both variants shows up in a real flip diff as context or as a
+      // cancelled byte-identical -/+ pair, so it never reaches a net side — yet the swap
+      // match requires it on both sides. Such a signature is dead. (Also covers
+      // block === block_b.)
+      if (s.block.some(l => s.block_b!.includes(l)))
+        throw new Error(`content_artifacts ${s.name}: block and block_b share a line — shared lines cancel out of the net change, so the signature can never match`);
+    }
+    // For substitution signatures both variants appear in every matching diff (one as
+    // -, one as +), so the marker may live in either block.
+    if (![...s.block, ...(s.block_b ?? [])].some(l => l.includes(s.marker)))
       throw new Error(`content_artifacts ${s.name}: marker is not a substring of any block line`);
   }
 }

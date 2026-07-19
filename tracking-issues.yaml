@@ -8,6 +8,8 @@ problematic_services:
 # Exact-block "flip-flop" scraping artifacts: a trailing block the scraper intermittently
 # captures/drops. Matched by EXACT net-change (multiset) equality on non-blank body lines,
 # scoped by service (+ optional documentType); classified "Unstable content (tracking error)."
+# Substitution flip-flops (content alternating between two variants) additionally set
+# block_b: the net change must be exactly block↔block_b, in either direction.
 # EXACT-MATCH RULES: every marker/block string is case-sensitive and byte-exact. Always
 # double-quote. Never use a block scalar (| adds \n, >- folds wraps) — both break matching.
 content_artifacts:
@@ -31,3 +33,11 @@ content_artifacts:
     marker: "We are changing how we show ads to UK users"
     block:
       - "_We are changing how we show ads to UK users. Our new [Privacy Policy for UK users](https://www.tiktok.com/legal/page/global/privacy-policy-eea-new/en) comes into effect on 11 November 2026 or, if you are in the UK, when you make a choice about ads._"
+  - name: youtube-monetisation-header-image   # header image URL alternates between two CDN hosts since 2026-07-16
+    services: ["YouTube"]
+    documentType: "Content Monetisation Policy"
+    marker: "storage.googleapis.com/support-kms-prod/3gqynDEORpTmOvDwv156D69K5bcKgUCq3UcV"
+    block:
+      - "![](//storage.googleapis.com/support-kms-prod/3gqynDEORpTmOvDwv156D69K5bcKgUCq3UcV)"
+    block_b:
+      - "![](//lh3.googleusercontent.com/gZJkLK0_Bw16E4nKtoh9SN-B37WMUk1ID1dbRP1fN_RXQ0jR5Hvgop0CAiShvwHD8w=w895)"

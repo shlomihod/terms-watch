@@ -21,9 +21,10 @@
 //                                                        (use when onboarding a NEW signature into tracking-issues.yaml)
 //
 // SAFETY: matching is EXACT net-change equality (single hunk, byte-identical lines
-// cancelled, every net non-blank line must equal the known block exactly). This does NOT
-// distinguish a genuine block-removal from an artifact — so review the dry-run before
-// --apply. The flip is reversible (row stays visible under "Include minor changes" and
+// cancelled, every net non-blank line must equal the known block exactly; signatures
+// with block_b instead require the net change to be exactly block↔block_b in either
+// direction). This does NOT distinguish a genuine block-removal from an artifact — so
+// review the dry-run before --apply. The flip is reversible (row stays visible under "Include minor changes" and
 // fetchable by id); RSS may lag ~1h (Cache-Control max-age=3600), as may the site's RSC cache.
 
 import { PrismaClient } from '@prisma/client';
@@ -31,6 +32,7 @@ import {
   loadTrackingConfig,
   validateContentArtifacts,
   netChange,
+  netSides,
   matchArtifact,
   type ContentArtifact,
   type Direction,
@@ -75,10 +77,23 @@ async function deriveMode(prisma: PrismaClient, idPrefix: string) {
   for (const r of rows) {
     const net = netChange(r.diffContent);
     console.log(`\n# ${label(r)}`);
-    if (!net) { console.log('  (not a single-hunk one-directional net change — cannot derive)'); continue; }
-    console.log(`  direction: ${net.direction}`);
-    console.log('  block:'); // paste under a new content_artifacts entry in tracking-issues.yaml
-    for (const l of net.lines) console.log(`    - ${JSON.stringify(l)}`);
+    if (net) {
+      console.log(`  direction: ${net.direction}`);
+      console.log('  block:'); // paste under a new content_artifacts entry in tracking-issues.yaml
+      for (const l of net.lines) console.log(`    - ${JSON.stringify(l)}`);
+      continue;
+    }
+    // Mixed net = substitution flip-flop candidate: derive as block (removed) + block_b (added).
+    const sides = netSides(r.diffContent);
+    if (!sides || (!sides.added.length && !sides.removed.length)) {
+      console.log('  (not a single-hunk net change — cannot derive)');
+      continue;
+    }
+    console.log('  direction: SWAP (substitution — verify both variants flip-flop before onboarding)');
+    console.log('  block:');
+    for (const l of sides.removed) console.log(`    - ${JSON.stringify(l)}`);
+    console.log('  block_b:');
+    for (const l of sides.added) console.log(`    - ${JSON.stringify(l)}`);
   }
 }
 
