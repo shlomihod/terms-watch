@@ -161,7 +161,25 @@ export async function generateSummary(diff: string, service: string, documentTyp
       model: cfg.model.name,
       max_tokens: cfg.model.max_tokens,
       temperature: cfg.model.temperature,
-      response_format: { type: 'json_object' }, // Enforce JSON response
+      // Schema-constrained decoding: the model cannot emit prose around the JSON
+      // or omit fields. The brace-slice + shape validation below stay as a safety
+      // net in case a provider falls back to unconstrained output.
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'diff_summary',
+          strict: true,
+          schema: {
+            type: 'object',
+            properties: {
+              isMinorChange: { type: 'boolean' },
+              summary: { type: 'string' },
+            },
+            required: ['isMinorChange', 'summary'],
+            additionalProperties: false,
+          },
+        },
+      },
       messages: [
         {
           role: 'system',
@@ -193,10 +211,18 @@ export async function generateSummary(diff: string, service: string, documentTyp
     }
     
     try {
-      const result = JSON.parse(responseText) as AISummaryResult;
+      // Even with response_format json_object, the model occasionally prefixes
+      // prose (e.g. "Here is the JSON requested{...}") — parse the outermost
+      // {...} instead of the raw text. No '{' found → empty string → parse
+      // throws → existing invalid-response fallback below.
+      const jsonText = responseText.slice(responseText.indexOf('{'), responseText.lastIndexOf('}') + 1);
+      const result = JSON.parse(jsonText) as AISummaryResult;
       
-      // Validate the result has required fields
-      if (!result.summary) {
+      // Require the full expected shape, not just a truthy summary: the brace-slice
+      // above can extract JSON the model merely quoted from the untrusted diff (e.g.
+      // in a refusal), and an undefined isMinorChange would silently store as
+      // non-minor via the Prisma column default.
+      if (typeof result.summary !== 'string' || !result.summary || typeof result.isMinorChange !== 'boolean') {
         return {
           isMinorChange: false,
           summary: `${service} updated their ${documentType}. AI analysis incomplete.`
