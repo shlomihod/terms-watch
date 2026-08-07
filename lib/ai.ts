@@ -52,35 +52,101 @@ function escapeRegExp(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// Exponential backoff between attempts: 1s, 2s, 4s (capped at 10s).
+function retryDelay(attempt: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, Math.min(1000 * Math.pow(2, attempt), 10000)));
+}
+
+// The single definition of "usable content", shared by the retry loop and the
+// caller's fallback branch. The two must agree: a response the loop declines to
+// retry must not then land on the caller's fallback. Type predicate so the caller
+// still narrows.
+function hasUsableContent(text: string | undefined): text is string {
+  return !!text && text !== '{}';
+}
+
+// The user-facing text for every failure where the LLM could not produce a usable
+// summary. A reader cannot act on WHY it failed, so the row points at the diff and
+// the specific cause goes to the server log. scripts/regen-summaries.ts finds rows
+// to reprocess by matching the "AI analysis temporarily unavailable." substring.
+function analysisUnavailable(service: string, documentType: string): AISummaryResult {
+  return {
+    isMinorChange: false,
+    summary: `${service} updated their ${documentType}. AI analysis temporarily unavailable. See diff for details.`,
+  };
+}
+
+// A 429 arrives as a rejected promise; an empty completion arrives as a RESOLVED
+// one carrying no usable content. Rethrowing the empty case as a sentinel routes
+// both into the same catch, so "is this retryable?" is decided in one place.
+// It carries the response so an exhausted retry can still hand it to the caller.
+class EmptyCompletionError extends Error {
+  constructor(readonly response: OpenAI.Chat.Completions.ChatCompletion) {
+    super('empty completion');
+    this.name = 'EmptyCompletionError';
+  }
+}
+
 async function makeAPICallWithRetry(
   client: OpenAI,
   requestBody: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming & { reasoning_effort?: 'low' | 'medium' | 'high' | 'minimal' },
+  label = '',
   maxRetries = 3
 ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
   let lastError: unknown;
-  
+
   for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const isLastAttempt = attempt === maxRetries - 1;
+
     try {
-      return await client.chat.completions.create(requestBody as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming);
+      const response = await client.chat.completions.create(requestBody as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming);
+
+      // An empty completion is an HTTP success carrying no usable content. It is
+      // retryable: nothing re-runs a change once it is stored except a manual
+      // script, so an un-retried empty draw becomes the row's permanent summary.
+      const content = response.choices[0]?.message?.content?.trim();
+      if (!hasUsableContent(content)) {
+        // This branch conflates a token-budget overrun (finish_reason "length" —
+        // with reasoning enabled the reasoning pass can consume all of max_tokens,
+        // leaving none for the message) with an upstream provider hiccup. They want
+        // different fixes and are indistinguishable from the response alone, so the
+        // deciding fields are logged here.
+        console.error('[ai] empty completion', {
+          label,
+          attempt: attempt + 1,
+          maxRetries,
+          finish_reason: response.choices[0]?.finish_reason,
+          usage: response.usage,
+        });
+        throw new EmptyCompletionError(response);
+      }
+
+      return response;
     } catch (error: unknown) {
       lastError = error;
-      
-      // Check if it's a rate limit error (429)
+
+      // One retry decision for both retryable conditions: rate limits (429) and
+      // empty completions.
       const err = error as { status?: number; statusCode?: number };
-      if (err.status === 429 || err.statusCode === 429) {
-        if (attempt < maxRetries - 1) {
-          // Exponential backoff: 1s, 2s, 4s
-          const delay = Math.min(1000 * Math.pow(2, attempt), 10000);
-          await new Promise(resolve => setTimeout(resolve, delay));
-          continue;
-        }
+      const isRateLimit = err.status === 429 || err.statusCode === 429;
+      const isEmpty = error instanceof EmptyCompletionError;
+
+      if ((isRateLimit || isEmpty) && !isLastAttempt) {
+        await retryDelay(attempt);
+        continue;
       }
-      
-      // For non-429 errors or if we've exhausted retries, throw immediately
+
+      // Attempts exhausted on an empty completion: return the response rather than
+      // throw, so the caller reaches its own empty check and the summary path.
+      if (error instanceof EmptyCompletionError) {
+        return error.response;
+      }
+
+      // For non-retryable errors, or once retries are exhausted, throw immediately
       throw error;
     }
   }
-  
+
   throw lastError;
 }
 
@@ -132,12 +198,13 @@ export async function generateSummary(diff: string, service: string, documentTyp
     // may now have real content worth summarizing.
   }
 
+  // Identifies the row in every log line below; a cron run interleaves many.
+  const label = `${service} — ${documentType}`;
+
   const client = getOpenAI();
   if (!client) {
-    return {
-      isMinorChange: false,
-      summary: `${service} updated their ${documentType}. AI summary not available.`
-    };
+    console.error('[ai] LLM_API_KEY not configured', { label });
+    return analysisUnavailable(service, documentType);
   }
 
   try {
@@ -197,17 +264,14 @@ export async function generateSummary(diff: string, service: string, documentTyp
       requestBody.reasoning_effort = cfg.model.reasoning_effort as 'low' | 'medium' | 'high' | 'minimal';
     }
 
-    // Make API call with retry logic for rate limits
-    const response = await makeAPICallWithRetry(client, requestBody);
+    // Make API call with retry logic for rate limits and empty completions
+    const response = await makeAPICallWithRetry(client, requestBody, label);
 
     const responseText = response.choices[0]?.message?.content?.trim();
-    
-    // Handle empty response properly
-    if (!responseText || responseText === '{}') {
-      return {
-        isMinorChange: false,
-        summary: `${service} updated their ${documentType}. AI analysis temporarily unavailable.`
-      };
+
+    // Still empty after makeAPICallWithRetry spent its full attempt budget.
+    if (!hasUsableContent(responseText)) {
+      return analysisUnavailable(service, documentType);
     }
     
     try {
@@ -223,10 +287,8 @@ export async function generateSummary(diff: string, service: string, documentTyp
       // in a refusal), and an undefined isMinorChange would silently store as
       // non-minor via the Prisma column default.
       if (typeof result.summary !== 'string' || !result.summary || typeof result.isMinorChange !== 'boolean') {
-        return {
-          isMinorChange: false,
-          summary: `${service} updated their ${documentType}. AI analysis incomplete.`
-        };
+        console.error('[ai] response missing required fields', { label });
+        return analysisUnavailable(service, documentType);
       }
       
       // Check if LLM returned the generic unavailable message pattern
@@ -256,25 +318,15 @@ export async function generateSummary(diff: string, service: string, documentTyp
       
       return result;
     } catch {
-      return {
-        isMinorChange: false,
-        summary: `${service} updated their ${documentType}. AI response was invalid.`
-      };
+      console.error('[ai] response was not parseable JSON', { label });
+      return analysisUnavailable(service, documentType);
     }
   } catch (error: unknown) {
-    // Log different error types
+    // status is what separates a rate limit from an auth failure, a 5xx, or a
+    // malformed request — the row itself reads the same for all of them.
     const err = error as { status?: number; message?: string };
-    if (err.status === 429) {
-      return {
-        isMinorChange: false,
-        summary: `${service} updated their ${documentType}. Analysis rate limited - try again later.`
-      };
-    }
-    
-    return {
-      isMinorChange: false,
-      summary: `${service} updated their ${documentType}. See diff for details.`
-    };
+    console.error('[ai] request failed', { label, status: err.status, message: err.message });
+    return analysisUnavailable(service, documentType);
   }
 }
 
