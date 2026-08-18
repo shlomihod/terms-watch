@@ -23,3 +23,4 @@ The JSON API below is the best way for agents to read the data: all endpoints ar
 
 - [Open Terms Archive](https://opentermsarchive.org/): Upstream source of the tracked documents.
 - [Source code](https://github.com/shlomihod/terms-watch): MIT-licensed source for this site.
+- [Shlomi Hod](https://shlomi.hod.xyz): Creator of Terms Watch.
