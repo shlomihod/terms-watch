@@ -8,12 +8,12 @@ The JSON API below is the best way for agents to read the data: all endpoints ar
 
 ## API
 
-- [List changes](https://termswatch.io/api/changes): Recent changes, newest first, with summaries but without diffs. Optional query parameters: `category` (`social` or `ai`), `service` (e.g. `TikTok`), `documentType` (e.g. `Privacy Policy`), `days` (only the last N days), `limit` (rows per page, max 200) and `offset` for pagination, and `includeFormattingOnly=true` to include formatting-only changes (hidden by default). Returns `{ changes, total, limit, offset }`. A single change, including its full diff, is at `https://termswatch.io/api/changes/{id}` using the `id` field from this endpoint.
+- [List changes](https://termswatch.io/api/changes): Recent changes, newest first, with summaries but without diffs (each item's `isMinorChange` flags formatting-only edits). Optional query parameters: `category` (`social` or `ai`), `service` (e.g. `TikTok`), `documentType` (e.g. `Privacy Policy`), `days` (only the last N days), `limit` (rows per page, max 200; larger values are silently clamped to 200) and `offset` for pagination, and `includeFormattingOnly=true` to include formatting-only changes (hidden by default). Returns `{ changes, total, limit, offset }`. A single change, including its full diff in the `diffContent` field, is at `https://termswatch.io/api/changes/{id}` using the `id` field from this endpoint.
 - [Filter options](https://termswatch.io/api/filter-options): The valid `service` and `documentType` values. `category`, `service`, and `documentType` parameters narrow the other lists (a parameter never narrows its own list). A listed value may have only formatting-only changes, which the list endpoint hides unless `includeFormattingOnly=true`.
 
 ## Feeds
 
-- [RSS feed](https://termswatch.io/rss): The most recent substantive changes (formatting-only changes are excluded, and the feed is capped to recent items). Edge-cached — poll this for updates.
+- [RSS feed](https://termswatch.io/rss): The 50 most recent substantive changes (formatting-only changes are excluded). Edge-cached — poll this for updates.
 
 ## Pages
 
