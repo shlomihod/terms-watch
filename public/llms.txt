@@ -1,0 +1,25 @@
+# Terms Watch
+
+> Monitor changes to Terms of Service, Privacy Policies, and Community Guidelines across major social media platforms and AI services.
+
+Tracking changes to Terms of Service across major platforms. Data sourced from [Open Terms Archive](https://opentermsarchive.org/), monitoring the [Platform Governance Archive](https://opentermsarchive.org/en/collections/pga/) and [Generative AI Governance Archive](https://opentermsarchive.org/en/collections/genai-eu/) collections. Most detected changes get an AI-generated summary and a diff; newly added or removed documents and unanalyzable changes carry a short standard note instead. The database updates twice daily.
+
+The JSON API below is the best way for agents to read the data: all endpoints are GET and need no authentication. To poll for updates, prefer the edge-cached RSS feed over repeatedly hitting the API.
+
+## API
+
+- [List changes](https://termswatch.io/api/changes): Recent changes, newest first, with summaries but without diffs. Optional query parameters: `category` (`social` or `ai`), `service` (e.g. `TikTok`), `documentType` (e.g. `Privacy Policy`), `days` (only the last N days), `limit` (rows per page, max 200) and `offset` for pagination, and `includeFormattingOnly=true` to include formatting-only changes (hidden by default). Returns `{ changes, total, limit, offset }`. A single change, including its full diff, is at `https://termswatch.io/api/changes/{id}` using the `id` field from this endpoint.
+- [Filter options](https://termswatch.io/api/filter-options): The valid `service` and `documentType` values. `category`, `service`, and `documentType` parameters narrow the other lists (a parameter never narrows its own list). A listed value may have only formatting-only changes, which the list endpoint hides unless `includeFormattingOnly=true`.
+
+## Feeds
+
+- [RSS feed](https://termswatch.io/rss): The most recent substantive changes (formatting-only changes are excluded, and the feed is capped to recent items). Edge-cached — poll this for updates.
+
+## Pages
+
+- [Home](https://termswatch.io/): Filterable timeline of recent changes. Each change also has a shareable page at `https://termswatch.io/change/{commitId}`, where `{commitId}` is the first 8 characters of the change `id`.
+
+## Optional
+
+- [Open Terms Archive](https://opentermsarchive.org/): Upstream source of the tracked documents.
+- [Source code](https://github.com/shlomihod/terms-watch): MIT-licensed source for this site.

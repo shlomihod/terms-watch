@@ -1,6 +1,6 @@
 import { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 import {
-  getChanges,
   getFilterOptions,
   getChangeByCommitPrefix,
   getChangesIncludingCommit,
@@ -21,9 +21,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const change = await getChangeByCommitPrefix(commitId);
 
   if (!change) {
-    return {
-      title: 'Change Not Found — Terms Watch',
-    };
+    notFound();
   }
 
   const title = `${change.service} updated their ${change.documentType} — Terms Watch`;
@@ -53,14 +51,7 @@ export default async function ChangePage({ params }: PageProps) {
   ]);
 
   if (!result) {
-    const changes = await getChanges();
-    return (
-      <HomeContent
-        changes={changes}
-        filterOptions={filterOptions}
-        notFoundCommitId={commitId}
-      />
-    );
+    notFound();
   }
 
   return (

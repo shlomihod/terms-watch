@@ -23,10 +23,10 @@ interface HomeContentProps {
     documentTypes: string[];
   };
   scrollToCommitId?: string;
-  notFoundCommitId?: string;
+  notFound?: boolean;
 }
 
-export function HomeContent({ changes, filterOptions, scrollToCommitId, notFoundCommitId }: HomeContentProps) {
+export function HomeContent({ changes, filterOptions, scrollToCommitId, notFound }: HomeContentProps) {
   return (
     <ClientLayout>
       <div className="min-h-screen bg-white">
@@ -79,7 +79,7 @@ export function HomeContent({ changes, filterOptions, scrollToCommitId, notFound
         </header>
 
         <main className="max-w-6xl mx-auto px-4 py-8 pb-20">
-          {notFoundCommitId && <NotFoundBanner commitId={notFoundCommitId} />}
+          {notFound && <NotFoundBanner />}
           <Feed
             initialChanges={changes}
             availableServices={filterOptions.services}
