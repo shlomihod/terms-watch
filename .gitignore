@@ -46,3 +46,7 @@ next-env.d.ts
 .env
 
 .claude/
+
+# model A/B harness artifacts (regenerate with scripts/ab-model.ts)
+judge/
+ab-*.json
