@@ -1,20 +1,20 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { X } from 'lucide-react';
 
 // Rendered from the /change/[commitId] not-found boundary, which receives no
-// route params — so the id is read from the URL after mount. Not usePathname:
+// route params — so the id is read from the URL on the client. Not usePathname:
 // it returns null while the boundary server-renders, which would throw and
-// bail the whole page out of SSR. The effect keeps server and first client
-// render identical (no id), avoiding a hydration mismatch.
+// bail the whole page out of SSR. The empty server snapshot keeps server and
+// first client render identical (no id), avoiding a hydration mismatch.
+const subscribe = () => () => {};
+const getShortId = () => window.location.pathname.split('/change/')[1]?.slice(0, 8) ?? '';
+const getServerShortId = () => '';
+
 export function NotFoundBanner() {
   const [dismissed, setDismissed] = useState(false);
-  const [shortId, setShortId] = useState('');
-
-  useEffect(() => {
-    setShortId(window.location.pathname.split('/change/')[1]?.slice(0, 8) ?? '');
-  }, []);
+  const shortId = useSyncExternalStore(subscribe, getShortId, getServerShortId);
 
   if (dismissed) return null;
 
