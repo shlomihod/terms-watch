@@ -109,14 +109,30 @@ export async function getChangesIncludingCommit(commitIdPrefix: string) {
   // scroll to it, so row count is unbounded by design. That stays cheap only
   // because the projection is metadata-only (each diff loads lazily per card);
   // keep diffContent out of it.
-  const changes = await prisma.change.findMany({
-    where: {
-      isMinorChange: false,
-      commitDate: { gte: target.commitDate },
-    },
-    orderBy: { commitDate: 'desc' },
-    select: CHANGE_LIST_SELECT,
-  });
+  const [newer, older] = await Promise.all([
+    prisma.change.findMany({
+      where: {
+        isMinorChange: false,
+        commitDate: { gte: target.commitDate },
+      },
+      orderBy: { commitDate: 'desc' },
+      select: CHANGE_LIST_SELECT,
+    }),
+    // scrollIntoView can only put the target at the top of the viewport if
+    // there is content below it to scroll past, so one feed page of older
+    // changes follows. Both queries keep /api/changes' filter and ordering:
+    // the feed resumes paging at initialChanges.length.
+    prisma.change.findMany({
+      where: {
+        isMinorChange: false,
+        commitDate: { lt: target.commitDate },
+      },
+      orderBy: { commitDate: 'desc' },
+      take: PAGE_SIZE,
+      select: CHANGE_LIST_SELECT,
+    }),
+  ]);
+  const changes = [...newer, ...older];
 
   return {
     target,
